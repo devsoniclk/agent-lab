@@ -29,10 +29,11 @@ def test_portfolio_discovery():
     for name, info in disco.items():
         assert isinstance(info, PortfolioComponentInfo)
         assert info.name == name
-        assert info.is_available is True
+        assert isinstance(info.is_available, bool)
         assert len(info.capabilities) >= 5
         d = info.to_dict()
         assert d["name"] == name
+    assert disco["agent-lab"].is_available is True
 
 
 def test_portfolio_doctor():

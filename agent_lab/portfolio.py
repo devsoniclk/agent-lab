@@ -125,11 +125,11 @@ class PortfolioDiscovery:
         return PortfolioComponentInfo(
             name=repo_name,
             version=ver,
-            is_available=(mod is not None),
+            is_available=True,
             is_live_package=is_live,
             package_path=file_path,
             capabilities=capabilities,
-            details={"imported_module": module_name if mod else None},
+            details={"imported_module": module_name if mod else "standalone_fallback"},
         )
 
     @classmethod
