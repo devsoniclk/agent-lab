@@ -131,9 +131,7 @@ def test_portfolio_benchmark():
 
 def test_portfolio_fallback_emulation():
     simulator = CrossRepoFleetSimulator()
-
-    # Test fallback branch when rollback raises an error
-    with patch("rollback.core.create_session", side_effect=ImportError("Mocked rollback missing")):
+    with patch.dict("sys.modules", {"rollback.core": None, "solana_tx_lens.priority_fee": None, "agent_witness.models": None}):
         receipt = simulator.run_simulation(simulation_id="sim_fallback_test")
         assert receipt.status == "SUCCESS"
         assert receipt.rollback_applied is True
