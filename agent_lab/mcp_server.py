@@ -24,11 +24,19 @@ from agent_lab.distributed import (
     NetworkMessage,
     MessageType,
 )
+from agent_lab.registry import (
+    AnchorAgentRegistryClient,
+    AgentStatus,
+    SlashingProof,
+    DEFAULT_MIN_STAKE_LAMPORTS,
+    ANCHOR_AGENT_REGISTRY_IDL,
+)
 
 # Default global orchestrator and collector
 _config = AgentLabConfig.load()
 _orchestrator = AgentLabOrchestrator(_config)
-_coordinator = SwarmCoordinator(workspace_root=_config.workspace_root)
+_registry = AnchorAgentRegistryClient()
+_coordinator = SwarmCoordinator(workspace_root=_config.workspace_root, registry_client=_registry)
 _telemetry = TelemetryCollector()
 
 
@@ -214,3 +222,132 @@ def agentlab_swarm_broadcast_proposal(
         "conflicts": res.conflicts,
         "duration_ms": res.duration_ms,
     })
+
+
+def agentlab_registry_register_agent(
+    pubkey: str,
+    name: str,
+    stake_lamports: int = DEFAULT_MIN_STAKE_LAMPORTS,
+    metadata_uri: str = "",
+) -> str:
+    """Register an autonomous agent validator on the Solana Anchor registry."""
+    try:
+        agent = _registry.register_agent(
+            pubkey=pubkey,
+            name=name,
+            metadata_uri=metadata_uri,
+            initial_stake=stake_lamports,
+        )
+        return json.dumps({
+            "status": "success",
+            "agent": agent.to_dict(),
+        })
+    except Exception as e:
+        return json.dumps({"status": "error", "error": str(e)})
+
+
+def agentlab_registry_get_agent(pubkey: str) -> str:
+    """Query on-chain stake, reputation score, and lifecycle status for an agent."""
+    agent = _registry.get_agent(pubkey)
+    if not agent:
+        return json.dumps({"status": "error", "error": f"Agent '{pubkey}' not found"})
+    return json.dumps({
+        "status": "success",
+        "agent": agent.to_dict(),
+    })
+
+
+def agentlab_registry_verify_stake(pubkey: str) -> str:
+    """Verify whether an agent meets the minimum stake threshold for BFT quorum voting."""
+    eligible, reason = _registry.verify_agent_eligibility(pubkey)
+    agent = _registry.get_agent(pubkey)
+    return json.dumps({
+        "status": "success",
+        "pubkey": pubkey,
+        "eligible": eligible,
+        "reason": reason,
+        "stake_lamports": agent.stake_lamports if agent else 0,
+        "min_required_lamports": _registry.min_stake_lamports,
+        "reputation_score": agent.reputation_score if agent else 0,
+    })
+
+
+def agentlab_registry_submit_slashing_proof(
+    offender_pubkey: str,
+    reporter_pubkey: str,
+    proposal_id: str,
+    vote_a_decision: bool,
+    vote_b_decision: bool,
+    vote_a_sig: str = "sig_a",
+    vote_b_sig: str = "sig_b",
+) -> str:
+    """Submit a cryptographic equivocation proof to slash offending validator collateral."""
+    # Ensure reporter is registered if not already present
+    if reporter_pubkey not in _registry.agents:
+        _registry.register_agent(
+            pubkey=reporter_pubkey,
+            name="Slashing Reporter",
+            initial_stake=_registry.min_stake_lamports,
+        )
+
+    proof = SlashingProof(
+        offender_pubkey=offender_pubkey,
+        reporter_pubkey=reporter_pubkey,
+        proposal_id=proposal_id,
+        vote_a_decision=vote_a_decision,
+        vote_a_sig=vote_a_sig,
+        vote_b_decision=vote_b_decision,
+        vote_b_sig=vote_b_sig,
+    )
+    try:
+        receipt = _registry.submit_slashing_proof(proof)
+        return json.dumps({
+            "status": "success",
+            "receipt": receipt.to_dict(),
+        })
+    except Exception as e:
+        return json.dumps({"status": "error", "error": str(e)})
+
+
+def agentlab_registry_list_agents() -> str:
+    """List all registered autonomous agents, stake balances, and statuses."""
+    agents = _registry.list_agents()
+    return json.dumps({
+        "status": "success",
+        "count": len(agents),
+        "total_staked_lamports": _registry.total_staked_lamports,
+        "agents": [a.to_dict() for a in agents],
+    })
+
+
+def agentlab_registry_deposit_stake(pubkey: str, amount_lamports: int) -> str:
+    """Deposit additional SOL collateral into an agent's on-chain stake account."""
+    try:
+        agent = _registry.deposit_stake(pubkey, amount_lamports)
+        return json.dumps({
+            "status": "success",
+            "agent": agent.to_dict(),
+        })
+    except Exception as e:
+        return json.dumps({"status": "error", "error": str(e)})
+
+
+def agentlab_registry_withdraw_stake(pubkey: str, amount_lamports: int) -> str:
+    """Withdraw SOL collateral from an agent's on-chain stake account."""
+    try:
+        agent = _registry.withdraw_stake(pubkey, amount_lamports)
+        return json.dumps({
+            "status": "success",
+            "agent": agent.to_dict(),
+        })
+    except Exception as e:
+        return json.dumps({"status": "error", "error": str(e)})
+
+
+def agentlab_registry_export_idl() -> str:
+    """Export the Anchor Program IDL specification for agent registry."""
+    return json.dumps({
+        "status": "success",
+        "idl": ANCHOR_AGENT_REGISTRY_IDL,
+    })
+

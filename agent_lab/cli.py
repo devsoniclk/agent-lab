@@ -34,6 +34,13 @@ from agent_lab.distributed import (
     NetworkMessage,
     MessageType,
 )
+from agent_lab.registry import (
+    AnchorAgentRegistryClient,
+    AgentStatus,
+    SlashingProof,
+    ANCHOR_AGENT_REGISTRY_IDL,
+    DEFAULT_MIN_STAKE_LAMPORTS,
+)
 
 console = Console()
 
@@ -378,6 +385,211 @@ def swarm_broadcast_proposal(workspace: str, proposal_id: str, proposer: str, ta
         ))
 
     asyncio.run(run_broadcast())
+
+
+@main.group()
+def registry() -> None:
+    """Solana Anchor On-Chain Agent Registry, Staking & Slashing tools."""
+    pass
+
+
+@registry.command("init")
+@click.option("--storage", default="agent_registry.json", help="Path to registry storage JSON file.")
+@click.option("--min-stake", default=DEFAULT_MIN_STAKE_LAMPORTS, help="Minimum required stake in lamports.")
+@click.option("--penalty-bps", default=5000, help="Slashing penalty in basis points (e.g. 5000 = 50%).")
+def registry_init(storage: str, min_stake: int, penalty_bps: int) -> None:
+    """Initialize a Solana Anchor agent registry configuration."""
+    client = AnchorAgentRegistryClient(
+        storage_path=storage,
+        min_stake_lamports=min_stake,
+        slashing_penalty_bps=penalty_bps,
+    )
+    client._save_storage()
+    console.print(Panel(
+        f"Program ID: [cyan]{client.program_id}[/cyan]\n"
+        f"Registry PDA: [cyan]{client.registry_pda}[/cyan] (bump: {client.registry_bump})\n"
+        f"Min Stake: [yellow]{client.min_stake_lamports / 1e9:.2f} SOL[/yellow] ({client.min_stake_lamports} lamports)\n"
+        f"Slashing Penalty: [yellow]{client.slashing_penalty_bps / 100:.1f}%[/yellow]\n"
+        f"Storage File: [dim]{storage}[/dim]",
+        title="[bold green]Solana Agent Registry Initialized[/bold green]",
+        border_style="green",
+    ))
+
+
+@registry.command("register")
+@click.option("--pubkey", required=True, help="Agent Solana public key.")
+@click.option("--name", required=True, help="Agent descriptive name.")
+@click.option("--stake", default=DEFAULT_MIN_STAKE_LAMPORTS, help="Initial stake in lamports.")
+@click.option("--metadata", default="", help="Metadata URI (Arweave/IPFS).")
+@click.option("--storage", default="agent_registry.json", help="Path to registry storage JSON file.")
+def registry_register(pubkey: str, name: str, stake: int, metadata: str, storage: str) -> None:
+    """Register an autonomous agent validator with on-chain stake."""
+    client = AnchorAgentRegistryClient(storage_path=storage)
+    try:
+        agent = client.register_agent(
+            pubkey=pubkey,
+            name=name,
+            metadata_uri=metadata,
+            initial_stake=stake,
+        )
+        console.print(Panel(
+            f"Agent Name: [bold]{agent.name}[/bold]\n"
+            f"Pubkey: [cyan]{agent.pubkey}[/cyan]\n"
+            f"Account PDA: [cyan]{agent.pda}[/cyan] (bump: {agent.bump})\n"
+            f"Stake: [yellow]{agent.stake_lamports / 1e9:.4f} SOL[/yellow]\n"
+            f"Reputation Score: [green]{agent.reputation_score}[/green]\n"
+            f"Status: [green]{agent.status.value.upper()}[/green]",
+            title="[bold green]Agent Registered Successfully[/bold green]",
+            border_style="green",
+        ))
+    except Exception as e:
+        console.print(f"[bold red]Registration failed:[/bold red] {e}")
+        sys.exit(1)
+
+
+@registry.command("stake")
+@click.option("--pubkey", required=True, help="Agent Solana public key.")
+@click.option("--amount", required=True, type=int, help="Additional stake in lamports.")
+@click.option("--storage", default="agent_registry.json", help="Path to registry storage JSON file.")
+def registry_stake(pubkey: str, amount: int, storage: str) -> None:
+    """Deposit additional SOL stake into an agent's account."""
+    client = AnchorAgentRegistryClient(storage_path=storage)
+    try:
+        agent = client.deposit_stake(pubkey, amount)
+        console.print(Panel(
+            f"Pubkey: [cyan]{agent.pubkey}[/cyan]\n"
+            f"Deposited: [yellow]{amount / 1e9:.4f} SOL[/yellow]\n"
+            f"Total Stake: [yellow]{agent.stake_lamports / 1e9:.4f} SOL[/yellow]\n"
+            f"Status: [green]{agent.status.value.upper()}[/green]",
+            title="[bold green]Stake Deposited[/bold green]",
+            border_style="green",
+        ))
+    except Exception as e:
+        console.print(f"[bold red]Deposit failed:[/bold red] {e}")
+        sys.exit(1)
+
+
+@registry.command("info")
+@click.option("--pubkey", required=True, help="Agent Solana public key.")
+@click.option("--storage", default="agent_registry.json", help="Path to registry storage JSON file.")
+def registry_info(pubkey: str, storage: str) -> None:
+    """Inspect an agent's on-chain account, stake, and reputation score."""
+    client = AnchorAgentRegistryClient(storage_path=storage)
+    agent = client.get_agent(pubkey)
+    if not agent:
+        console.print(f"[bold red]Agent '{pubkey}' not found in registry.[/bold red]")
+        sys.exit(1)
+
+    eligible, reason = client.verify_agent_eligibility(pubkey)
+    status_color = "green" if agent.status == AgentStatus.ACTIVE else "red"
+    console.print(Panel(
+        f"Name: [bold]{agent.name}[/bold]\n"
+        f"Pubkey: [cyan]{agent.pubkey}[/cyan]\n"
+        f"PDA: [dim]{agent.pda}[/dim] (bump: {agent.bump})\n"
+        f"Status: [{status_color}]{agent.status.value.upper()}[/{status_color}]\n"
+        f"Stake: [yellow]{agent.stake_lamports / 1e9:.4f} SOL[/yellow] ({agent.stake_lamports} lamports)\n"
+        f"Reputation Score: [cyan]{agent.reputation_score}[/cyan] / 10000\n"
+        f"Consensus Eligibility: [{'green' if eligible else 'red'}]{'ELIGIBLE' if eligible else 'INELIGIBLE'}[/{'green' if eligible else 'red'}] ({reason})\n"
+        f"Slashed Count: [red]{agent.slashed_count}[/red]\n"
+        f"Metadata URI: [dim]{agent.metadata_uri or 'None'}[/dim]",
+        title="Agent On-Chain Account Details",
+        border_style="cyan",
+    ))
+
+
+@registry.command("list")
+@click.option("--storage", default="agent_registry.json", help="Path to registry storage JSON file.")
+def registry_list(storage: str) -> None:
+    """List all registered agents and their stake/reputation metrics."""
+    client = AnchorAgentRegistryClient(storage_path=storage)
+    agents = client.list_agents()
+    if not agents:
+        console.print("[yellow]No agents currently registered.[/yellow]")
+        return
+
+    table = Table(title="Solana Anchor Agent Registry Validators")
+    table.add_column("Name", style="bold")
+    table.add_column("Pubkey", style="cyan")
+    table.add_column("Stake (SOL)", style="yellow")
+    table.add_column("Reputation", style="magenta")
+    table.add_column("Status", style="green")
+    table.add_column("Slashes", style="red")
+
+    for a in agents:
+        status_style = "green" if a.status == AgentStatus.ACTIVE else "red"
+        table.add_row(
+            a.name,
+            a.pubkey,
+            f"{a.stake_lamports / 1e9:.3f}",
+            str(a.reputation_score),
+            f"[{status_style}]{a.status.value.upper()}[/{status_style}]",
+            str(a.slashed_count),
+        )
+
+    console.print(table)
+
+
+@registry.command("slash-proof")
+@click.option("--offender", required=True, help="Offending agent public key.")
+@click.option("--reporter", required=True, help="Reporting agent public key.")
+@click.option("--proposal", required=True, help="Proposal ID where equivocation occurred.")
+@click.option("--vote-a", required=True, type=str, help="First vote decision (approve/reject or true/false).")
+@click.option("--sig-a", default="sig_a", help="First vote signature.")
+@click.option("--vote-b", required=True, type=str, help="Second conflicting vote decision.")
+@click.option("--sig-b", default="sig_b", help="Second vote signature.")
+@click.option("--storage", default="agent_registry.json", help="Path to registry storage JSON file.")
+def registry_slash_proof(
+    offender: str,
+    reporter: str,
+    proposal: str,
+    vote_a: str,
+    sig_a: str,
+    vote_b: str,
+    sig_b: str,
+    storage: str,
+) -> None:
+    """Submit a cryptographic equivocation proof and slash offender stake."""
+    def _parse_decision(val: str) -> bool:
+        s = val.strip().lower()
+        return s in ("true", "1", "approve", "precommit", "yes")
+
+    client = AnchorAgentRegistryClient(storage_path=storage)
+    proof = SlashingProof(
+        offender_pubkey=offender,
+        reporter_pubkey=reporter,
+        proposal_id=proposal,
+        vote_a_decision=_parse_decision(vote_a),
+        vote_a_sig=sig_a,
+        vote_b_decision=_parse_decision(vote_b),
+        vote_b_sig=sig_b,
+    )
+    try:
+        receipt = client.submit_slashing_proof(proof)
+        console.print(Panel(
+            f"Receipt ID: [cyan]{receipt.receipt_id}[/cyan]\n"
+            f"Offender: [red]{receipt.offender_pubkey}[/red] ([bold red]JAILED[/bold red])\n"
+            f"Reporter: [green]{receipt.reporter_pubkey}[/green]\n"
+            f"Slashed Collateral: [red]{receipt.slashed_lamports / 1e9:.4f} SOL[/red]\n"
+            f"Burned: [red]{receipt.burned_lamports / 1e9:.4f} SOL[/red] | Reward: [green]{receipt.reward_lamports / 1e9:.4f} SOL[/green]\n"
+            f"Tx Signature: [dim]{receipt.tx_signature}[/dim]",
+            title="[bold red]Equivocation Slashing Executed[/bold red]",
+            border_style="red",
+        ))
+    except Exception as e:
+        console.print(f"[bold red]Slashing failed:[/bold red] {e}")
+        sys.exit(1)
+
+
+@registry.command("export-idl")
+@click.option("--out", default="", help="Output JSON path (prints to stdout if omitted).")
+def registry_export_idl(out: str) -> None:
+    """Export the Anchor Program IDL specification for agent registry."""
+    idl_json = json.dumps(ANCHOR_AGENT_REGISTRY_IDL, indent=2)
+    if out:
+        Path(out).write_text(idl_json, encoding="utf-8")
+        console.print(f"[green]Anchor IDL exported to [bold]{out}[/bold][/green]")
+    else:
+        click.echo(idl_json)
 
 
 if __name__ == "__main__":

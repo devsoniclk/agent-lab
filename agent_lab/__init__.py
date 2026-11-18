@@ -23,8 +23,21 @@ from agent_lab.distributed import (
     MessageType,
     PeerInfo,
 )
+from agent_lab.registry import (
+    AgentStatus,
+    AgentAccount,
+    SlashingProof,
+    SlashingReceipt,
+    AnchorAgentRegistryClient,
+    derive_anchor_discriminator,
+    derive_pda,
+    ANCHOR_AGENT_REGISTRY_IDL,
+    DEFAULT_REGISTRY_PROGRAM_ID,
+    DEFAULT_MIN_STAKE_LAMPORTS,
+    DEFAULT_SLASHING_PENALTY_BPS,
+)
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 __all__ = [
     "AgentLabConfig",
     "AgentLabOrchestrator",
@@ -48,4 +61,15 @@ __all__ = [
     "NetworkMessage",
     "MessageType",
     "PeerInfo",
+    "AgentStatus",
+    "AgentAccount",
+    "SlashingProof",
+    "SlashingReceipt",
+    "AnchorAgentRegistryClient",
+    "derive_anchor_discriminator",
+    "derive_pda",
+    "ANCHOR_AGENT_REGISTRY_IDL",
+    "DEFAULT_REGISTRY_PROGRAM_ID",
+    "DEFAULT_MIN_STAKE_LAMPORTS",
+    "DEFAULT_SLASHING_PENALTY_BPS",
 ]

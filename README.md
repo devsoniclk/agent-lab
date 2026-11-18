@@ -93,6 +93,7 @@ flowchart TD
 - **BFT Swarm Consensus Engine:** 2-phase Byzantine Fault Tolerant consensus across multi-agent worker swarms with $Q = \lfloor 2W/3 \rfloor + 1$ quorum verification.
 - **Optimistic Concurrency Control (OCC):** Fine-grained read-set and write-set conflict detection preventing write-write collisions in parallel coding swarms.
 - **Equivocation Slashing:** Real-time detection of conflicting votes by rogue or compromised agents, automatically isolating Byzantine validators.
+- **Solana Anchor On-Chain Agent Registry & Economic Slashing:** Decentralized identity and stake-weighted governance (`AnchorAgentRegistryClient`). Features deterministic Program Derived Address (PDA) derivation (`["agent", pubkey]`), minimum stake thresholds, deposit/withdrawal accounting, and cryptographic equivocation slashing (50% burned, 50% reporter bounty, reputation score deduction).
 - **Cryptographic Merkle Action Receipts:** Computes RFC 6962-compliant Merkle trees over deliberation steps (Observation -> Thought -> Tool Call -> Action), producing tamper-evident `.witness` files.
 - **Pre-Flight Web3 Simulation:** Simulates Solana transactions pre-flight, profiling Compute Units (CU) and decoding custom Anchor errors.
 - **Autonomous Evaluation Harness & Trajectory Scoring:**
@@ -108,7 +109,13 @@ flowchart TD
   - Full-duplex asynchronous multi-host worker clustering over WebSockets with cryptographic HMAC-SHA256 message signing.
   - Automatic peer registration, keepalive heartbeats, disconnection recovery, state synchronization (`SYNC_REQ`/`SYNC_RESP`), and slashing broadcast.
   - Interactive CLI commands (`agent-lab swarm serve`, `agent-lab swarm worker`, `agent-lab swarm broadcast-proposal`).
-- **FastMCP Protocol Integration:** Exposes 15 native tools for Claude Code, OpenBot, Cursor, and custom agent harnesses.
+- **Solana Anchor On-Chain Agent Registry & Slashing:**
+  - Decentralized agent identity with deterministic Program Derived Address (PDA) derivation (`["agent", pubkey]`) and Anchor discriminator calculation.
+  - Stake-weighted governance and minimum collateral enforcement (`min_stake_lamports = 0.1 SOL`).
+  - Cryptographic equivocation slashing engine executing 50% collateral burns and 50% reporter rewards, reputation penalties (-2500 bps), and moving offenders to `JAILED` status.
+  - Complete Anchor Program IDL (`ANCHOR_AGENT_REGISTRY_IDL`) with instructions, accounts, and error codes.
+  - CLI commands (`agent-lab registry register`, `stake`, `info`, `list`, `slash-proof`, `export-idl`).
+- **FastMCP Protocol Integration:** Exposes 21 native tools for Claude Code, OpenBot, Cursor, and custom agent harnesses.
 
 ---
 
@@ -290,8 +297,8 @@ print(f"Committed: {result.committed}, Quorum: {result.quorum_reached}")
 - [x] **v0.1.0:** Core meta-orchestrator, transactional sessions, BFT consensus coordinator, OCC conflict detection, Pass@k evaluation harness, and FastMCP server.
 - [x] **v0.2.0:** Multi-agent trajectory tool-use scoring (Precision/Recall/F1), loop & repetition detection, Wilson confidence intervals, benchmark suite execution (`humaneval_mini.json`), and cross-agent terminal telemetry dashboard.
 - [x] **v0.3.0:** Distributed WebSocket consensus transport for multi-host worker swarms with HMAC-SHA256 authentication and state synchronization.
-- [ ] **v0.4.0:** Solana Anchor on-chain agent registry and staking contract integration.
-- [ ] **v0.5.0:** Zero-knowledge execution proofs via RISC Zero zkVM guest verification.
+- [x] **v0.4.0:** Solana Anchor on-chain agent registry, economic staking, and cryptographic equivocation slashing engine.
+- [ ] **v0.5.0:** Autonomous Zero-Knowledge execution and slashing attestation proofs via RISC Zero zkVM guest verification.
 - [ ] **v1.0.0:** General Availability enterprise release with PyPI binary distributions.
 
 ---

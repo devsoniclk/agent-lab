@@ -1,6 +1,6 @@
 """
 agent_lab.consensus: Multi-agent BFT Swarm Consensus Coordinator with
-Optimistic Concurrency Control (OCC) and automatic filesystem rollback.
+Optimistic Concurrency Control (OCC), on-chain staking validation, and automatic filesystem rollback.
 """
 
 from __future__ import annotations
@@ -9,7 +9,10 @@ import hashlib
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple
+
+if TYPE_CHECKING:
+    from agent_lab.registry import AnchorAgentRegistryClient
 
 
 @dataclass
@@ -54,18 +57,21 @@ class SwarmConsensusResult:
     applied_files: List[str]
     reverted_files: List[str]
     duration_ms: float
+    slashing_receipts: List[Dict[str, Any]] = field(default_factory=list)
 
 
 class SwarmCoordinator:
-    """Orchestrates multi-agent consensus and guards atomic disk commits."""
+    """Orchestrates multi-agent consensus, guards atomic disk commits, and verifies on-chain stakes."""
 
     def __init__(
         self,
         workspace_root: str,
         quorum_ratio: float = 2.0 / 3.0,
+        registry_client: Optional[AnchorAgentRegistryClient] = None,
     ) -> None:
         self.workspace_root = Path(workspace_root).resolve()
         self.quorum_ratio = quorum_ratio
+        self.registry_client = registry_client
         self.committed_versions: Dict[str, str] = {}  # path -> sha256
         self.slashed_validators: Set[str] = set()
 
@@ -85,28 +91,73 @@ class SwarmCoordinator:
         start_time = time.time()
         round_id = f"rnd_{int(start_time*1000)}"
 
+        # 0. On-Chain Stake and Eligibility Filtering
+        active_validators = dict(validators)
+        if self.registry_client is not None:
+            filtered_validators: Dict[str, float] = {}
+            for v_id, weight in active_validators.items():
+                eligible, _ = self.registry_client.verify_agent_eligibility(v_id)
+                if eligible:
+                    filtered_validators[v_id] = weight
+            active_validators = filtered_validators
+
         # 1. Detect Equivocations (double voting by the same validator)
         equivocations: List[str] = []
-        seen_votes: Dict[str, bool] = {}
+        slashing_receipts: List[Dict[str, Any]] = []
+        seen_votes: Dict[str, SwarmVote] = {}
         valid_votes: List[SwarmVote] = []
 
         for vote in votes:
             if vote.voter in self.slashed_validators:
                 continue
+
+            # If registry client is active, check voter eligibility
+            if self.registry_client is not None:
+                eligible, _ = self.registry_client.verify_agent_eligibility(vote.voter)
+                if not eligible:
+                    continue
+
             if vote.voter in seen_votes:
-                if seen_votes[vote.voter] != vote.decision:
+                prev_vote = seen_votes[vote.voter]
+                if prev_vote.decision != vote.decision:
                     equivocations.append(vote.voter)
                     self.slashed_validators.add(vote.voter)
+
+                    # Submit slashing proof to Solana Anchor registry
+                    if self.registry_client is not None:
+                        try:
+                            from agent_lab.registry import SlashingProof
+                            reporter = proposal.proposer if proposal.proposer != vote.voter else "coordinator"
+                            # Ensure reporter is registered for reward distribution
+                            if reporter not in self.registry_client.agents:
+                                self.registry_client.register_agent(
+                                    pubkey=reporter,
+                                    name="Consensus Reporter",
+                                    initial_stake=self.registry_client.min_stake_lamports,
+                                )
+                            proof = SlashingProof(
+                                offender_pubkey=vote.voter,
+                                reporter_pubkey=reporter,
+                                proposal_id=proposal.proposal_id,
+                                vote_a_decision=prev_vote.decision,
+                                vote_a_sig=prev_vote.signature or f"sig_{vote.voter}_a",
+                                vote_b_decision=vote.decision,
+                                vote_b_sig=vote.signature or f"sig_{vote.voter}_b",
+                            )
+                            receipt = self.registry_client.submit_slashing_proof(proof)
+                            slashing_receipts.append(receipt.to_dict())
+                        except Exception:
+                            pass
                     continue
-            seen_votes[vote.voter] = vote.decision
+            seen_votes[vote.voter] = vote
             valid_votes.append(vote)
 
         # 2. Compute BFT Quorum
-        total_weight = sum(w for v, w in validators.items() if v not in self.slashed_validators)
+        total_weight = sum(w for v, w in active_validators.items() if v not in self.slashed_validators)
         approved_weight = sum(
-            validators.get(v.voter, 1.0)
+            active_validators.get(v.voter, 1.0)
             for v in valid_votes
-            if v.decision and v.voter in validators and v.voter not in self.slashed_validators
+            if v.decision and v.voter in active_validators and v.voter not in self.slashed_validators
         )
 
         quorum_reached = total_weight > 0 and (approved_weight / total_weight) >= (self.quorum_ratio - 0.005)
@@ -156,4 +207,5 @@ class SwarmCoordinator:
             applied_files=applied_files,
             reverted_files=reverted_files,
             duration_ms=round(duration_ms, 2),
+            slashing_receipts=slashing_receipts,
         )

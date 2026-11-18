@@ -25,6 +25,7 @@ from agent_lab.consensus import (
     SwarmProposal,
     SwarmVote,
 )
+from agent_lab.registry import AnchorAgentRegistryClient
 
 logger = logging.getLogger("agent_lab.distributed")
 
@@ -155,16 +156,19 @@ class DistributedCoordinator:
         port: int = 8765,
         secret: str = "",
         quorum_ratio: float = 2.0 / 3.0,
+        registry_client: Optional[AnchorAgentRegistryClient] = None,
     ) -> None:
         self.workspace_root = Path(workspace_root).resolve()
         self.host = host
         self.port = port
         self.secret = secret
         self.quorum_ratio = quorum_ratio
+        self.registry_client = registry_client
 
         self.coordinator = SwarmCoordinator(
             workspace_root=str(self.workspace_root),
             quorum_ratio=self.quorum_ratio,
+            registry_client=self.registry_client,
         )
 
         self.peers: Dict[str, PeerInfo] = {}
@@ -230,6 +234,26 @@ class DistributedCoordinator:
                 if msg.msg_type == MessageType.HANDSHAKE:
                     remote_node_id = msg.sender
                     weight = float(msg.payload.get("weight", 1.0))
+
+                    if self.registry_client is not None:
+                        eligible, reason = self.registry_client.verify_agent_eligibility(remote_node_id)
+                        if not eligible:
+                            logger.warning(f"Rejecting ineligible peer '{remote_node_id}': {reason}")
+                            rej_msg = NetworkMessage(
+                                msg_id=f"rej_{int(time.time()*1000)}",
+                                msg_type=MessageType.REJECT,
+                                sender="coordinator",
+                                payload={"error": "INELIGIBLE_VALIDATOR", "reason": reason},
+                            )
+                            if self.secret:
+                                rej_msg.sign(self.secret)
+                            try:
+                                await websocket.send(rej_msg.to_json())
+                                await websocket.close(code=4003, reason=reason)
+                            except Exception:
+                                pass
+                            break
+
                     self.peers[remote_node_id] = PeerInfo(
                         node_id=remote_node_id,
                         weight=weight,
@@ -381,7 +405,11 @@ class DistributedCoordinator:
                 msg_type=MessageType.SLASH,
                 sender="coordinator",
                 round_id=round_id,
-                payload={"slashed_validator": slashed, "reason": "Equivocation double voting"},
+                payload={
+                    "slashed_validator": slashed,
+                    "reason": "Equivocation double voting",
+                    "slashing_receipts": result.slashing_receipts,
+                },
             )
             await self.broadcast(slash_msg)
 

@@ -5,6 +5,18 @@ All notable changes to `agent-lab` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-11-18
+
+### Added
+- **Solana Anchor On-Chain Agent Registry (`AnchorAgentRegistryClient`)**: Decentralized identity, deterministic Program Derived Address (PDA) derivation (`["agent", pubkey]`), and Anchor discriminator calculations (`derive_anchor_discriminator`) for autonomous agents participating in governance and consensus.
+- **Economic Staking & Collateral Requirements**: Minimum stake threshold validation (`DEFAULT_MIN_STAKE_LAMPORTS = 0.1 SOL`), stake deposits, withdrawals, and automatic lifecycle status transitions (`ACTIVE`, `INACTIVE`, `SLASHED`, `JAILED`).
+- **Cryptographic Equivocation Slashing Engine**: Detects contradictory double-voting by rogue validators, calculates deterministic penalty collateral deductions (5000 bps / 50%), executes 50% collateral burn and 50% reporter bounty distribution, deducts reputation penalties (-2500 bps), and moves offending agents to `JAILED` status.
+- **BFT Consensus & Swarm Registry Integration**: Integrated `SwarmCoordinator` with on-chain registry verification. Automatically filters out unregistered or under-staked nodes from voting weight, and triggers automated on-chain slashing submissions when conflicting votes occur.
+- **Complete Anchor Program IDL (`ANCHOR_AGENT_REGISTRY_IDL`)**: Production-ready Anchor specification defining instructions (`initialize_registry`, `register_agent`, `deposit_stake`, `withdraw_stake`, `submit_slashing_proof`), accounts (`AgentRegistryState`, `AgentAccount`), and error codes (6000-6004).
+- **Registry CLI Commands (`agent-lab registry`)**: Added `init`, `register`, `stake`, `info`, `list`, `slash-proof`, and `export-idl` subcommands with rich interactive terminal tables and panels.
+- **FastMCP Registry Tools**: Added 7 new tools (`agentlab_registry_register_agent`, `agentlab_registry_get_agent`, `agentlab_registry_verify_stake`, `agentlab_registry_list_agents`, `agentlab_registry_deposit_stake`, `agentlab_registry_withdraw_stake`, `agentlab_registry_submit_slashing_proof`, `agentlab_registry_export_idl`).
+- **Expanded Test Suite**: Added 20 new tests in `test_registry.py`, `test_cli_v4.py`, `test_mcp_v4.py`, and `test_v4_coverage_edges.py` (82 total tests, 100% pass rate, 93% code coverage).
+
 ## [0.3.0] - 2026-11-18
 
 ### Added
