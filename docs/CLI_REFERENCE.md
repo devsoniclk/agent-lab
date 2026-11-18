@@ -274,3 +274,50 @@ Import memories from a serialized JSON backup file.
 agent-lab memory import -f <backup.json>
 ```
 
+---
+
+## 9. Multi-Agent Tournament Arena & Swarm Workflow Benchmarks (`agent-lab arena`)
+
+### `agent-lab arena match`
+Execute a head-to-head evaluation match between two agents and update Elo ratings.
+
+```bash
+agent-lab arena match -a <agent_a> -b <agent_b> [--passed-a <int>] [--passed-b <int>] [--total <int>] [--tokens-a <int>] [--tokens-b <int>] [-j <path>]
+```
+
+### `agent-lab arena tournament`
+Execute a multi-agent round-robin tournament across all participant pairs and display standings.
+
+```bash
+agent-lab arena tournament [-a <comma_separated_agents>] [-r <rounds>] [-j <path>]
+```
+
+### `agent-lab arena ratings`
+Display current Elo leaderboard standings, win rates, and 95% Wilson confidence intervals.
+
+```bash
+agent-lab arena ratings [-j <path>]
+```
+
+### `agent-lab arena benchmark-swarm`
+Benchmark end-to-end multi-agent collaborative DAG workflow execution (Specification -> Codegen -> Review -> BFT Consensus).
+
+```bash
+agent-lab arena benchmark-swarm [--workflow-id <id>] [--workflow-name <name>] [--planner <id>] [--coder <id>] [--reviewer <id>] [--auditor <id>] [-j <path>]
+```
+
+### `agent-lab arena export`
+Export arena leaderboard and match history to a serialized JSON file.
+
+```bash
+agent-lab arena export -o <arena_backup.json>
+```
+
+### `agent-lab arena import`
+Import arena leaderboard state and match history from a JSON backup file.
+
+```bash
+agent-lab arena import -f <arena_backup.json>
+```
+
+

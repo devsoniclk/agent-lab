@@ -60,6 +60,16 @@ from agent_lab.memory import (
     MemoryEntry,
     MemorySearchResult,
 )
+from agent_lab.arena import (
+    AgentMatchScore,
+    ArenaLeaderboard,
+    EloRatingSystem,
+    MatchOutcome,
+    MatchResult,
+    SwarmWorkflowHarness,
+    SwarmWorkflowReport,
+    SwarmWorkflowStage,
+)
 
 # Default global orchestrator and collector
 _config = AgentLabConfig.load()
@@ -69,6 +79,8 @@ _coordinator = SwarmCoordinator(workspace_root=_config.workspace_root, registry_
 _telemetry = TelemetryCollector()
 _router = AdaptiveModelRouter()
 _memory_store = CrossAgentMemoryStore()
+_arena_leaderboard = ArenaLeaderboard()
+_workflow_harness = SwarmWorkflowHarness()
 
 
 def agentlab_session_start(agent_name: str, goal: str) -> str:
@@ -925,6 +937,128 @@ def agentlab_memory_clear_or_evict(
         })
     except Exception as e:
         return json.dumps({"status": "error", "error": str(e)})
+
+
+def agentlab_arena_run_match(
+    agent_a: str,
+    agent_b: str,
+    tasks_passed_a: int = 8,
+    tasks_passed_b: int = 7,
+    total_tasks: int = 10,
+    tokens_a: int = 1500,
+    tokens_b: int = 2200,
+    ast_score_a: float = 1.0,
+    ast_score_b: float = 1.0,
+    trajectory_score_a: float = 1.0,
+    trajectory_score_b: float = 1.0,
+) -> str:
+    """Execute a competitive head-to-head evaluation match in the multi-agent tournament arena."""
+    try:
+        pass_rate_a = tasks_passed_a / total_tasks if total_tasks > 0 else 0.0
+        pass_rate_b = tasks_passed_b / total_tasks if total_tasks > 0 else 0.0
+
+        score_a = AgentMatchScore(
+            agent_id=agent_a,
+            tasks_passed=tasks_passed_a,
+            total_tasks=total_tasks,
+            pass_rate=pass_rate_a,
+            avg_latency_ms=150.0,
+            total_tokens=tokens_a,
+            ast_score=ast_score_a,
+            trajectory_score=trajectory_score_a,
+        )
+        score_b = AgentMatchScore(
+            agent_id=agent_b,
+            tasks_passed=tasks_passed_b,
+            total_tasks=total_tasks,
+            pass_rate=pass_rate_b,
+            avg_latency_ms=180.0,
+            total_tokens=tokens_b,
+            ast_score=ast_score_b,
+            trajectory_score=trajectory_score_b,
+        )
+
+        outcome = _arena_leaderboard.record_match(
+            agent_a=agent_a,
+            agent_b=agent_b,
+            score_a=score_a,
+            score_b=score_b,
+        )
+
+        return json.dumps({
+            "status": "success",
+            "match": outcome.to_dict(),
+            "new_ratings": {
+                agent_a: _arena_leaderboard.ratings[agent_a],
+                agent_b: _arena_leaderboard.ratings[agent_b],
+            },
+        })
+    except Exception as e:
+        return json.dumps({"status": "error", "error": str(e)})
+
+
+def agentlab_arena_get_ratings() -> str:
+    """Retrieve full Elo leaderboard rankings, match records, and Wilson confidence intervals."""
+    try:
+        rankings = _arena_leaderboard.get_rankings()
+        return json.dumps({
+            "status": "success",
+            "total_agents": len(rankings),
+            "total_matches": len(_arena_leaderboard.match_history),
+            "rankings": rankings,
+        })
+    except Exception as e:
+        return json.dumps({"status": "error", "error": str(e)})
+
+
+def agentlab_arena_benchmark_swarm(
+    workflow_id: str = "wf-std-dev",
+    workflow_name: str = "Standard 4-Stage Multi-Agent Dev Pipeline",
+    planner: str = "agent-planner",
+    coder: str = "agent-coder",
+    reviewer: str = "agent-reviewer",
+    auditor: str = "agent-auditor",
+) -> str:
+    """Execute end-to-end multi-agent collaborative DAG workflow benchmark."""
+    try:
+        stages = SwarmWorkflowHarness.create_standard_dev_workflow(
+            workflow_id=workflow_id,
+            planner=planner,
+            coder=coder,
+            reviewer=reviewer,
+            auditor=auditor,
+        )
+        report = _workflow_harness.execute_workflow(
+            workflow_id=workflow_id,
+            workflow_name=workflow_name,
+            stages=stages,
+        )
+        return json.dumps({
+            "status": "success",
+            "report": report.to_dict(),
+        })
+    except Exception as e:
+        return json.dumps({"status": "error", "error": str(e)})
+
+
+def agentlab_arena_export_ratings(export_path: str = "") -> str:
+    """Export the arena leaderboard and match history to JSON."""
+    try:
+        data = _arena_leaderboard.to_dict()
+        if export_path:
+            p = Path(export_path)
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        return json.dumps({
+            "status": "success",
+            "exported_agents": len(_arena_leaderboard.ratings),
+            "exported_matches": len(_arena_leaderboard.match_history),
+            "path": export_path or "in-memory",
+            "data": data if not export_path else None,
+        })
+    except Exception as e:
+        return json.dumps({"status": "error", "error": str(e)})
+
 
 
 

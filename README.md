@@ -136,7 +136,13 @@ flowchart TD
   - Hybrid lexical/dense vector retrieval harmonizing cosine similarity, token overlap, continuous exponential temporal recency decay, and importance weighting.
   - Memory eviction policies (`DECAY`, `LRU`, `LIF`) and full JSON export/import serialization.
   - Interactive CLI commands (`agent-lab memory store`, `search`, `stats`, `evict`, `export`, `import`).
-- **FastMCP Protocol Integration:** Exposes 37 native tools for Claude Code, OpenBot, Cursor, and custom agent harnesses.
+- **Multi-Agent Tournament Arena & Collaborative Swarm Benchmark Harness (v0.9.0):**
+  - Deterministic multi-agent Elo rating engine with dynamic K-factors (provisional vs. established) and Wilson score confidence intervals (`EloRatingSystem`).
+  - Bradley-Terry Luce iterative maximum likelihood choice estimation for multi-agent skill ranking (`BradleyTerryEstimator`).
+  - Unified composite match scoring balancing correctness (50%), AST validity (20%), trajectory rule compliance (15%), and token efficiency (15%).
+  - Multi-agent collaborative DAG workflow evaluation harness measuring stage latency, token consumption, BFT consensus rounds, and coordination efficiency (`SwarmWorkflowHarness`).
+  - Interactive CLI commands (`agent-lab arena match`, `tournament`, `ratings`, `benchmark-swarm`, `export`, `import`).
+- **FastMCP Protocol Integration:** Exposes 41 native tools for Claude Code, OpenBot, Cursor, and custom agent harnesses.
 
 ---
 
@@ -353,6 +359,7 @@ print(f"Verified: {report.is_valid}, Action Merkle Root: {report.action_merkle_r
 - [x] **v0.6.0:** Cross-agent unified benchmark leaderboard, multi-model token economics, Pareto frontier analysis, and interactive dark-theme SVG dashboard.
 - [x] **v0.7.0:** Adaptive dynamic token rate-limiter, circuit breakers, and cross-model fallback cascade router.
 - [x] **v0.8.0:** Cross-agent semantic memory store, pure-Python episodic vector index, hybrid lexical/dense retrieval, and memory decay eviction.
+- [x] **v0.9.0:** Multi-agent tournament arena, adaptive Elo rating engine, Bradley-Terry skill estimation, and collaborative swarm workflow benchmark harness.
 - [ ] **v1.0.0:** General Availability enterprise release with PyPI binary distributions.
 
 ---

@@ -89,8 +89,19 @@ from agent_lab.memory import (
     cosine_similarity,
     euclidean_distance,
 )
+from agent_lab.arena import (
+    MatchResult,
+    AgentMatchScore,
+    MatchOutcome,
+    EloRatingSystem,
+    BradleyTerryEstimator,
+    ArenaLeaderboard,
+    SwarmWorkflowStage,
+    SwarmWorkflowReport,
+    SwarmWorkflowHarness,
+)
 
-__version__ = "0.8.0"
+__version__ = "0.9.0"
 __all__ = [
     "AgentLabConfig",
     "AgentLabOrchestrator",
@@ -170,4 +181,13 @@ __all__ = [
     "normalize_vector",
     "cosine_similarity",
     "euclidean_distance",
+    "MatchResult",
+    "AgentMatchScore",
+    "MatchOutcome",
+    "EloRatingSystem",
+    "BradleyTerryEstimator",
+    "ArenaLeaderboard",
+    "SwarmWorkflowStage",
+    "SwarmWorkflowReport",
+    "SwarmWorkflowHarness",
 ]

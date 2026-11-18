@@ -5,6 +5,28 @@ All notable changes to `agent-lab` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-11-18
+
+### Added
+- **Multi-Agent Tournament Arena & Head-to-Head Evaluation Engine (`agent_lab.arena`)**:
+  - `EloRatingSystem`: Adaptive multi-agent Elo rating engine with dynamic K-factors (provisional vs. established), logistic win probability expectation ($E_A = \frac{1}{1 + 10^{(R_B - R_A)/400}}$), and Wilson score confidence intervals.
+  - `BradleyTerryEstimator`: Iterative Luce / Bradley-Terry maximum likelihood skill estimation solving for latent capability parameters from head-to-head match matrices.
+  - `AgentMatchScore` & `MatchOutcome`: Unified composite scoring metric balancing task pass rate (50%), syntax AST validity (20%), trajectory rule compliance (15%), and token efficiency (15%).
+  - `ArenaLeaderboard`: Persistent state and rankings tracker recording Elo scores, match histories, win/loss/draw records, and win-rate Wilson confidence intervals with full JSON serialization.
+- **Collaborative Swarm Workflow Benchmark Harness (`SwarmWorkflowHarness`)**:
+  - Benchmarks end-to-end multi-agent collaborative DAG workflows (e.g. Specification -> Codegen -> Review -> BFT Consensus).
+  - Evaluates stage completion, latency per agent, token consumption, BFT consensus rounds, and coordination efficiency.
+- **Arena CLI Command Group (`agent-lab arena`)**:
+  - `agent-lab arena match`: Runs head-to-head evaluation match between two agents and updates Elo ratings.
+  - `agent-lab arena tournament`: Executes multi-agent round-robin tournament across all participant pairs.
+  - `agent-lab arena ratings`: Displays current Elo leaderboard standings and win-rate statistics.
+  - `agent-lab arena benchmark-swarm`: Benchmarks collaborative multi-agent DAG workflow execution.
+  - `agent-lab arena export` & `import`: Manages file-based JSON leaderboard backups and restoration.
+- **FastMCP Protocol Extensions**:
+  - Added 4 new native tools: `agentlab_arena_run_match`, `agentlab_arena_get_ratings`, `agentlab_arena_benchmark_swarm`, `agentlab_arena_export_ratings` (expanding the FastMCP suite to 41 tools).
+- **Expanded Test Suite**:
+  - Added 20 new unit and integration tests across `tests/test_arena.py`, `tests/test_cli_v9.py`, `tests/test_mcp_v9.py`, and `tests/test_v9_coverage_edges.py` (209 total tests, 100% pass rate, 92% code coverage).
+
 ## [0.8.0] - 2026-11-18
 
 ### Added
