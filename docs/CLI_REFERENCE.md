@@ -150,3 +150,24 @@ Export the production-ready Anchor Program IDL specification for agent registry.
 ```bash
 agent-lab registry export-idl [--out <path>]
 ```
+
+### `agent-lab zk generate-receipt`
+Synthesize a verifiable zero-knowledge virtual machine (zkVM) execution receipt for agent deliberation trajectories (supporting RISC Zero and Succinct SP1).
+
+```bash
+agent-lab zk generate-receipt [--trajectory-file <path>] [--session-id <id>] [--system risc0|sp1] [--max-steps <int>] [--require-ast] [--out <path>]
+```
+
+### `agent-lab zk verify-receipt`
+Cryptographically audit and verify a zkVM trajectory receipt against policy constraints, program ID allowlists, and expected Merkle roots.
+
+```bash
+agent-lab zk verify-receipt -f <receipt.json> [--allow-program-id <id>] [--require-ast] [--expected-root <root_hash>]
+```
+
+### `agent-lab zk inspect`
+Inspect the full committed journal payload, action Merkle tree root, seal, and metadata of a zkVM execution receipt.
+
+```bash
+agent-lab zk inspect -f <receipt.json>
+```

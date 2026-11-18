@@ -31,6 +31,13 @@ from agent_lab.registry import (
     DEFAULT_MIN_STAKE_LAMPORTS,
     ANCHOR_AGENT_REGISTRY_IDL,
 )
+from agent_lab.zk import (
+    ZKTrajectoryEngine,
+    ZKTrajectoryReceipt,
+    ZKPolicyConstraints,
+    DEFAULT_RISC0_IMAGE_ID,
+    DEFAULT_SP1_VKEY,
+)
 
 # Default global orchestrator and collector
 _config = AgentLabConfig.load()
@@ -350,4 +357,123 @@ def agentlab_registry_export_idl() -> str:
         "status": "success",
         "idl": ANCHOR_AGENT_REGISTRY_IDL,
     })
+
+
+def agentlab_zk_generate_receipt(
+    session_id: str = "",
+    steps_json: str = "[]",
+    zkvm_system: str = "risc0",
+    max_steps: int = 50,
+    require_ast: bool = False,
+    program_id: str = "",
+) -> str:
+    """Generate a verifiable zero-knowledge virtual machine (zkVM) receipt for agent trajectory."""
+    try:
+        steps = json.loads(steps_json) if steps_json else []
+        constraints = ZKPolicyConstraints(
+            max_steps=max_steps,
+            require_ast_verification=require_ast,
+        )
+        receipt = ZKTrajectoryEngine.generate_receipt(
+            steps=steps,
+            session_id=session_id or None,
+            constraints=constraints,
+            zkvm_system=zkvm_system,
+            program_id=program_id or None,
+        )
+        return json.dumps({
+            "status": "success",
+            "receipt": receipt.to_dict(),
+        })
+    except Exception as e:
+        return json.dumps({"status": "error", "error": str(e)})
+
+
+def agentlab_zk_verify_receipt(
+    receipt_json: str,
+    require_ast: bool = False,
+    allowed_program_id: str = "",
+    expected_merkle_root: str = "",
+) -> str:
+    """Cryptographically verify a zkVM trajectory receipt against policy constraints and seals."""
+    try:
+        data = json.loads(receipt_json)
+        receipt = ZKTrajectoryReceipt.from_dict(data)
+        constraints = ZKPolicyConstraints(
+            require_ast_verification=require_ast,
+            allowed_program_ids=[allowed_program_id] if allowed_program_id else None,
+        )
+        report = ZKTrajectoryEngine.verify_receipt(
+            receipt=receipt,
+            constraints=constraints,
+            expected_merkle_root=expected_merkle_root or None,
+        )
+        return json.dumps({
+            "status": "success",
+            "report": report.to_dict(),
+        })
+    except Exception as e:
+        return json.dumps({"status": "error", "error": str(e)})
+
+
+def agentlab_zk_audit_trajectory(
+    session_id: str = "",
+    steps_json: str = "[]",
+    reference_steps_json: str = "",
+    zkvm_system: str = "risc0",
+    max_steps: int = 50,
+    require_ast: bool = True,
+) -> str:
+    """End-to-end evaluation, zkVM receipt generation, and cryptographic audit for an agent trajectory."""
+    try:
+        steps = json.loads(steps_json) if steps_json else []
+        ref_steps = json.loads(reference_steps_json) if reference_steps_json else None
+        constraints = ZKPolicyConstraints(
+            max_steps=max_steps,
+            require_ast_verification=require_ast,
+        )
+        receipt = ZKTrajectoryEngine.generate_receipt(
+            steps=steps,
+            session_id=session_id or None,
+            constraints=constraints,
+            zkvm_system=zkvm_system,
+            reference_steps=ref_steps,
+        )
+        report = ZKTrajectoryEngine.verify_receipt(
+            receipt=receipt,
+            constraints=constraints,
+        )
+        return json.dumps({
+            "status": "success",
+            "is_valid": report.is_valid,
+            "receipt": receipt.to_dict(),
+            "report": report.to_dict(),
+        })
+    except Exception as e:
+        return json.dumps({"status": "error", "error": str(e)})
+
+
+def agentlab_zk_policy_digest(
+    max_steps: int = 50,
+    require_ast: bool = False,
+    allowed_tools_csv: str = "",
+    forbidden_tools_csv: str = "",
+) -> str:
+    """Compute the deterministic SHA-256 digest of a set of zkVM policy constraints."""
+    try:
+        allowed = [t.strip() for t in allowed_tools_csv.split(",") if t.strip()] if allowed_tools_csv else None
+        forbidden = [t.strip() for t in forbidden_tools_csv.split(",") if t.strip()] if forbidden_tools_csv else None
+        constraints = ZKPolicyConstraints(
+            max_steps=max_steps,
+            allowed_tools=allowed,
+            forbidden_tools=forbidden,
+            require_ast_verification=require_ast,
+        )
+        return json.dumps({
+            "status": "success",
+            "policy_digest": constraints.compute_digest(),
+            "constraints": constraints.to_dict(),
+        })
+    except Exception as e:
+        return json.dumps({"status": "error", "error": str(e)})
 

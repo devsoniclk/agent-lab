@@ -24,6 +24,7 @@ class SwarmProposal:
     read_set: Dict[str, str] = field(default_factory=dict)   # path -> sha256
     write_set: Dict[str, str] = field(default_factory=dict)  # path -> sha256
     file_mutations: Dict[str, bytes] = field(default_factory=dict)  # path -> content
+    zk_receipt: Optional[Dict[str, Any]] = None
     timestamp: float = field(default_factory=time.time)
 
     def compute_hash(self) -> str:
@@ -58,6 +59,7 @@ class SwarmConsensusResult:
     reverted_files: List[str]
     duration_ms: float
     slashing_receipts: List[Dict[str, Any]] = field(default_factory=list)
+    zk_report: Optional[Dict[str, Any]] = None
 
 
 class SwarmCoordinator:
@@ -68,10 +70,14 @@ class SwarmCoordinator:
         workspace_root: str,
         quorum_ratio: float = 2.0 / 3.0,
         registry_client: Optional[AnchorAgentRegistryClient] = None,
+        require_zk_proof: bool = False,
+        zk_constraints: Optional[Any] = None,
     ) -> None:
         self.workspace_root = Path(workspace_root).resolve()
         self.quorum_ratio = quorum_ratio
         self.registry_client = registry_client
+        self.require_zk_proof = require_zk_proof
+        self.zk_constraints = zk_constraints
         self.committed_versions: Dict[str, str] = {}  # path -> sha256
         self.slashed_validators: Set[str] = set()
 
@@ -174,7 +180,23 @@ class SwarmCoordinator:
             elif current_disk and current_disk != expected_hash and rel_path not in proposal.write_set:
                 conflicts.append(f"OCC disk-drift conflict on '{rel_path}': expected {expected_hash[:8]}, disk {current_disk[:8]}")
 
-        # 4. Atomic Commit or Revert
+        # 4. Zero-Knowledge Trajectory Verification (ZK-Guarded Consensus)
+        zk_report: Optional[Dict[str, Any]] = None
+        if self.require_zk_proof:
+            from agent_lab.zk import ZKTrajectoryEngine, ZKTrajectoryReceipt
+            if not proposal.zk_receipt:
+                conflicts.append("MISSING_ZK_PROOF: Proposal lacks mandatory zero-knowledge trajectory execution receipt.")
+            else:
+                try:
+                    zk_receipt_obj = ZKTrajectoryReceipt.from_dict(proposal.zk_receipt)
+                    report = ZKTrajectoryEngine.verify_receipt(zk_receipt_obj, constraints=self.zk_constraints)
+                    zk_report = report.to_dict()
+                    if not report.is_valid:
+                        conflicts.append(f"INVALID_ZK_PROOF: {report.error_message or 'Receipt validation failed.'}")
+                except Exception as e:
+                    conflicts.append(f"CORRUPT_ZK_PROOF: Failed to parse or verify zk receipt: {str(e)}")
+
+        # 5. Atomic Commit or Revert
         committed = False
         applied_files: List[str] = []
         reverted_files: List[str] = []
@@ -208,4 +230,5 @@ class SwarmCoordinator:
             reverted_files=reverted_files,
             duration_ms=round(duration_ms, 2),
             slashing_receipts=slashing_receipts,
+            zk_report=zk_report,
         )

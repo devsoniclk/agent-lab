@@ -41,6 +41,13 @@ from agent_lab.registry import (
     ANCHOR_AGENT_REGISTRY_IDL,
     DEFAULT_MIN_STAKE_LAMPORTS,
 )
+from agent_lab.zk import (
+    ZKTrajectoryEngine,
+    ZKTrajectoryReceipt,
+    ZKPolicyConstraints,
+    DEFAULT_RISC0_IMAGE_ID,
+    DEFAULT_SP1_VKEY,
+)
 
 console = Console()
 
@@ -590,6 +597,177 @@ def registry_export_idl(out: str) -> None:
         console.print(f"[green]Anchor IDL exported to [bold]{out}[/bold][/green]")
     else:
         click.echo(idl_json)
+
+
+@main.group()
+def zk() -> None:
+    """Zero-Knowledge Trajectory Execution & Deliberation Verifier tools."""
+    pass
+
+
+@zk.command("generate-receipt")
+@click.option("--trajectory-file", "-f", default="", help="Path to JSON file containing trajectory steps.")
+@click.option("--session-id", "-s", default="", help="Optional session ID.")
+@click.option("--system", default="risc0", type=click.Choice(["risc0", "sp1"]), help="zkVM target system.")
+@click.option("--max-steps", default=50, help="Maximum allowable steps in policy constraints.")
+@click.option("--require-ast/--no-require-ast", default=False, help="Enforce AST syntax validity on generated code.")
+@click.option("--out", default="", help="Output file path for generated receipt JSON.")
+def zk_generate_receipt(
+    trajectory_file: str,
+    session_id: str,
+    system: str,
+    max_steps: int,
+    require_ast: bool,
+    out: str,
+) -> None:
+    """Synthesize a zero-knowledge trajectory execution receipt (RISC Zero / SP1)."""
+    steps = []
+    if trajectory_file:
+        p = Path(trajectory_file)
+        if not p.is_file():
+            console.print(f"[bold red]File not found:[/bold red] {trajectory_file}")
+            sys.exit(1)
+        try:
+            steps = json.loads(p.read_text(encoding="utf-8"))
+        except Exception as e:
+            console.print(f"[bold red]Failed to parse trajectory JSON:[/bold red] {e}")
+            sys.exit(1)
+    else:
+        # Generate a standard benchmark demonstration trajectory
+        steps = [
+            {"step_index": 0, "type": "action", "tool": "file_reader", "content": "read README.md"},
+            {"step_index": 1, "type": "action", "tool": "code_generator", "content": "def add(a: int, b: int) -> int:\n    return a + b\n"},
+            {"step_index": 2, "type": "action", "tool": "test_runner", "content": "pytest test_math.py"},
+        ]
+
+    constraints = ZKPolicyConstraints(
+        max_steps=max_steps,
+        require_ast_verification=require_ast,
+    )
+
+    try:
+        receipt = ZKTrajectoryEngine.generate_receipt(
+            steps=steps,
+            session_id=session_id or None,
+            constraints=constraints,
+            zkvm_system=system,
+        )
+
+        receipt_dict = receipt.to_dict()
+        if out:
+            Path(out).write_text(json.dumps(receipt_dict, indent=2), encoding="utf-8")
+            console.print(f"[green]Receipt successfully written to [bold]{out}[/bold][/green]")
+
+        table = Table(title="[bold green]ZKVM Trajectory Execution Receipt[/bold green]")
+        table.add_column("Property", style="cyan")
+        table.add_column("Value", style="magenta")
+
+        table.add_row("Receipt ID", receipt.receipt_id)
+        table.add_row("Session ID", receipt.session_id)
+        table.add_row("zkVM System", receipt.zkvm_system.upper())
+        table.add_row("Program ID", f"{receipt.program_id[:18]}...{receipt.program_id[-8:]}")
+        table.add_row("Step Count", str(receipt.journal.get("step_count", 0)))
+        table.add_row("Action Merkle Root", f"{receipt.journal.get('action_merkle_root', '')[:16]}...")
+        table.add_row("Journal Digest", f"{receipt.journal_digest[:16]}...")
+        table.add_row("Status Code", str(receipt.journal.get("status_code", 0)))
+        table.add_row("AST Verified", str(receipt.journal.get("ast_verified", True)))
+        table.add_row("Cryptographic Seal", f"{receipt.seal_hex[:22]}...{receipt.seal_hex[-10:]}")
+        console.print(table)
+    except Exception as e:
+        console.print(f"[bold red]Failed to generate receipt:[/bold red] {e}")
+        sys.exit(1)
+
+
+@zk.command("verify-receipt")
+@click.option("--receipt-file", "-f", required=True, help="Path to JSON file containing ZKTrajectoryReceipt.")
+@click.option("--allow-program-id", multiple=True, help="Allowed program IDs.")
+@click.option("--require-ast/--no-require-ast", default=False, help="Require AST verification.")
+@click.option("--expected-root", default="", help="Expected action Merkle root.")
+def zk_verify_receipt(
+    receipt_file: str,
+    allow_program_id: tuple[str, ...],
+    require_ast: bool,
+    expected_root: str,
+) -> None:
+    """Cryptographically audit and verify a zkVM trajectory execution receipt."""
+    p = Path(receipt_file)
+    if not p.is_file():
+        console.print(f"[bold red]File not found:[/bold red] {receipt_file}")
+        sys.exit(1)
+
+    try:
+        data = json.loads(p.read_text(encoding="utf-8"))
+        receipt = ZKTrajectoryReceipt.from_dict(data)
+    except Exception as e:
+        console.print(f"[bold red]Invalid receipt JSON:[/bold red] {e}")
+        sys.exit(1)
+
+    constraints = ZKPolicyConstraints(
+        require_ast_verification=require_ast,
+        allowed_program_ids=list(allow_program_id) if allow_program_id else None,
+    )
+
+    report = ZKTrajectoryEngine.verify_receipt(
+        receipt=receipt,
+        constraints=constraints,
+        expected_merkle_root=expected_root or None,
+    )
+
+    table = Table(title="[bold blue]ZKVM Trajectory Cryptographic Verification Report[/bold blue]")
+    table.add_column("Audit Check", style="cyan")
+    table.add_column("Status", justify="center")
+    table.add_column("Details", style="dim")
+
+    for c in report.checks:
+        status_str = "[bold green]PASS[/bold green]" if c.get("passed") else "[bold red]FAIL[/bold red]"
+        detail_items = [f"{k}={v}" for k, v in c.items() if k not in ("check", "passed")]
+        table.add_row(c.get("check", "unknown"), status_str, ", ".join(detail_items))
+
+    console.print(table)
+
+    verdict_style = "bold green" if report.is_valid else "bold red"
+    verdict_text = "VERIFIED VALID" if report.is_valid else f"VERIFICATION FAILED: {report.error_message}"
+    console.print(Panel(
+        f"[{verdict_style}]{verdict_text}[/{verdict_style}]\n"
+        f"System: {report.zkvm_system.upper()} | Program ID: {report.program_id[:16]}... | Root: {report.action_merkle_root[:16]}...\n"
+        f"Duration: {report.verification_duration_ms:.2f}ms",
+        title="[bold]Audit Verdict[/bold]",
+        border_style="green" if report.is_valid else "red",
+    ))
+
+    if not report.is_valid:
+        sys.exit(1)
+
+
+@zk.command("inspect")
+@click.option("--receipt-file", "-f", required=True, help="Path to JSON file containing ZKTrajectoryReceipt.")
+def zk_inspect(receipt_file: str) -> None:
+    """Inspect the full journal, Merkle root, seal, and metadata of a ZK receipt."""
+    p = Path(receipt_file)
+    if not p.is_file():
+        console.print(f"[bold red]File not found:[/bold red] {receipt_file}")
+        sys.exit(1)
+
+    try:
+        data = json.loads(p.read_text(encoding="utf-8"))
+        receipt = ZKTrajectoryReceipt.from_dict(data)
+    except Exception as e:
+        console.print(f"[bold red]Invalid receipt JSON:[/bold red] {e}")
+        sys.exit(1)
+
+    console.print(Panel(
+        f"[bold cyan]Receipt ID:[/bold cyan] {receipt.receipt_id}\n"
+        f"[bold cyan]Session ID:[/bold cyan] {receipt.session_id}\n"
+        f"[bold cyan]System:[/bold cyan] {receipt.zkvm_system.upper()}\n"
+        f"[bold cyan]Program ID:[/bold cyan] {receipt.program_id}\n"
+        f"[bold cyan]Action Merkle Root:[/bold cyan] {receipt.journal.get('action_merkle_root')}\n"
+        f"[bold cyan]Journal Digest:[/bold cyan] {receipt.journal_digest}\n"
+        f"[bold cyan]Seal:[/bold cyan] {receipt.seal_hex}\n\n"
+        f"[bold yellow]Committed Journal Payload:[/bold yellow]\n"
+        f"{json.dumps(receipt.journal, indent=2)}",
+        title="[bold magenta]ZKVM Receipt Details[/bold magenta]",
+        border_style="magenta",
+    ))
 
 
 if __name__ == "__main__":

@@ -36,8 +36,18 @@ from agent_lab.registry import (
     DEFAULT_MIN_STAKE_LAMPORTS,
     DEFAULT_SLASHING_PENALTY_BPS,
 )
+from agent_lab.zk import (
+    ZKVMSystem,
+    ZKProofType,
+    ZKPolicyConstraints,
+    ZKTrajectoryReceipt,
+    ZKVerificationReport,
+    ZKTrajectoryEngine,
+    DEFAULT_RISC0_IMAGE_ID,
+    DEFAULT_SP1_VKEY,
+)
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 __all__ = [
     "AgentLabConfig",
     "AgentLabOrchestrator",
@@ -72,4 +82,12 @@ __all__ = [
     "DEFAULT_REGISTRY_PROGRAM_ID",
     "DEFAULT_MIN_STAKE_LAMPORTS",
     "DEFAULT_SLASHING_PENALTY_BPS",
+    "ZKVMSystem",
+    "ZKProofType",
+    "ZKPolicyConstraints",
+    "ZKTrajectoryReceipt",
+    "ZKVerificationReport",
+    "ZKTrajectoryEngine",
+    "DEFAULT_RISC0_IMAGE_ID",
+    "DEFAULT_SP1_VKEY",
 ]

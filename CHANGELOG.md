@@ -5,6 +5,26 @@ All notable changes to `agent-lab` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-11-18
+
+### Added
+- **Zero-Knowledge Trajectory Execution & Deliberation Verifier (`agent_lab.zk`)**:
+  - `ZKTrajectoryEngine`: Synthesizes and cryptographically audits succinct zero-knowledge execution receipts for agent deliberation trajectories and tool-use traces across RISC Zero (`risc0`) guest ELF and Succinct SP1 (`sp1`) zkVM architectures.
+  - `ZKTrajectoryReceipt`: Verifiable zkVM execution receipt binding session ID, step count, tool call counts, action Merkle tree root, AST code safety verification flags, and deterministic cryptographic seal.
+  - `ZKPolicyConstraints`: Security bounds enforced by the zkVM guest including maximum execution steps, allowed tool allowlists, forbidden tool denylists, mandatory AST syntax verification on code emissions, and minimum trajectory F1 score thresholds.
+  - `ZKVerificationReport`: Granular cryptographic audit report validating journal digest integrity, program ID allowlist compliance, action Merkle root match, policy digest match, execution status code zero, and deterministic cryptographic seal signature binding.
+- **ZK-Guarded Swarm Consensus Integration**:
+  - `SwarmCoordinator`: Added `require_zk_proof` flag and `zk_constraints` policy bounds. Proposals submitted to BFT swarm rounds can require a valid, verified `ZKTrajectoryReceipt`. Rejects missing, tampered, or invalid zk receipts with atomic safety rollbacks.
+  - `DistributedCoordinator` & `DistributedSwarmNode`: Network proposals serialized across distributed WebSocket swarms carry `zk_receipt` payloads for remote zero-knowledge consensus validation.
+- **ZK CLI Command Group (`agent-lab zk`)**:
+  - `agent-lab zk generate-receipt`: Generate succinct zkVM execution receipts for executed or synthetic benchmark trajectories with customizable policy constraints and target systems (`--system risc0|sp1`).
+  - `agent-lab zk verify-receipt`: Cryptographically verify a zkVM trajectory receipt against policy constraints, program ID allowlists, and expected Merkle roots with detailed rich terminal audit tables.
+  - `agent-lab zk inspect`: Inspect committed journal payloads, action Merkle roots, seals, and metadata.
+- **FastMCP Zero-Knowledge Tools**:
+  - Added 4 new tools: `agentlab_zk_generate_receipt`, `agentlab_zk_verify_receipt`, `agentlab_zk_audit_trajectory`, `agentlab_zk_policy_digest` (expanding the FastMCP tool suite to 25 tools).
+- **Expanded Test Suite**:
+  - Added 31 new unit and integration tests across `tests/test_zk.py`, `tests/test_zk_consensus.py`, `tests/test_cli_v5.py`, and `tests/test_mcp_v5.py` (113 total tests, 100% pass rate, 93% code coverage).
+
 ## [0.4.0] - 2026-11-18
 
 ### Added

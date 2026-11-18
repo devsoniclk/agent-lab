@@ -125,6 +125,7 @@ def serialize_proposal(proposal: SwarmProposal) -> Dict[str, Any]:
         "read_set": proposal.read_set,
         "write_set": proposal.write_set,
         "file_mutations": mutations_hex,
+        "zk_receipt": proposal.zk_receipt,
         "timestamp": proposal.timestamp,
     }
 
@@ -139,6 +140,7 @@ def deserialize_proposal(data: Dict[str, Any]) -> SwarmProposal:
         read_set=data.get("read_set", {}),
         write_set=data.get("write_set", {}),
         file_mutations=mutations_bytes,
+        zk_receipt=data.get("zk_receipt"),
         timestamp=data.get("timestamp", time.time()),
     )
 

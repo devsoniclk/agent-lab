@@ -94,6 +94,7 @@ flowchart TD
 - **Optimistic Concurrency Control (OCC):** Fine-grained read-set and write-set conflict detection preventing write-write collisions in parallel coding swarms.
 - **Equivocation Slashing:** Real-time detection of conflicting votes by rogue or compromised agents, automatically isolating Byzantine validators.
 - **Solana Anchor On-Chain Agent Registry & Economic Slashing:** Decentralized identity and stake-weighted governance (`AnchorAgentRegistryClient`). Features deterministic Program Derived Address (PDA) derivation (`["agent", pubkey]`), minimum stake thresholds, deposit/withdrawal accounting, and cryptographic equivocation slashing (50% burned, 50% reporter bounty, reputation score deduction).
+- **Zero-Knowledge Trajectory Execution & Deliberation Verifier (`agent_lab.zk`):** Synthesizes and cryptographically audits succinct zero-knowledge execution receipts for agent deliberation trajectories across RISC Zero (`risc0`) guest ELF and Succinct SP1 (`sp1`) zkVM architectures. Binds session ID, tool counts, action Merkle tree roots, AST code safety flags, and policy constraint adherence into verifiable cryptographic receipts. Supports ZK-guarded swarm consensus rounds.
 - **Cryptographic Merkle Action Receipts:** Computes RFC 6962-compliant Merkle trees over deliberation steps (Observation -> Thought -> Tool Call -> Action), producing tamper-evident `.witness` files.
 - **Pre-Flight Web3 Simulation:** Simulates Solana transactions pre-flight, profiling Compute Units (CU) and decoding custom Anchor errors.
 - **Autonomous Evaluation Harness & Trajectory Scoring:**
@@ -214,6 +215,36 @@ result = coordinator.run_consensus_round(
 )
 
 print(f"Committed: {result.committed}, Quorum: {result.quorum_reached}")
+```
+
+### Zero-Knowledge Trajectory Execution & Audit
+```python
+from agent_lab.zk import ZKTrajectoryEngine, ZKPolicyConstraints
+
+# 1. Define agent execution steps
+steps = [
+    {"step_index": 0, "type": "action", "tool": "file_reader", "content": "read prompt.txt"},
+    {"step_index": 1, "type": "action", "tool": "coder", "content": "def add(a: int, b: int) -> int:\n    return a + b\n"},
+]
+
+# 2. Enforce strict zkVM execution constraints
+constraints = ZKPolicyConstraints(
+    max_steps=20,
+    require_ast_verification=True,
+    forbidden_tools=["rm_rf"],
+)
+
+# 3. Synthesize cryptographic zkVM receipt (RISC Zero / SP1)
+receipt = ZKTrajectoryEngine.generate_receipt(
+    steps=steps,
+    session_id="agent_sess_42",
+    constraints=constraints,
+    zkvm_system="risc0",
+)
+
+# 4. Cryptographically audit receipt
+report = ZKTrajectoryEngine.verify_receipt(receipt, constraints=constraints)
+print(f"Verified: {report.is_valid}, Action Merkle Root: {report.action_merkle_root}")
 ```
 
 ---
