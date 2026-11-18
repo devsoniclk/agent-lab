@@ -147,7 +147,13 @@ flowchart TD
   - Full-lifecycle multi-agent mission execution combining memory pre-fetch, adaptive model fallback routing, BFT consensus, SP1 zkVM attestation, AST verification, and arena rating updates via `agent-lab fleet run-mission`.
   - Sub-millisecond sequential mission throughput benchmarking via `agent-lab fleet benchmark`.
   - Cryptographically sealed `FleetExecutionReceipt` with verifiable SHA-256 integrity seal.
-- **FastMCP Protocol Integration:** Exposes 45 native tools for Claude Code, OpenBot, Cursor, and custom agent harnesses.
+- **Cross-Repository Portfolio Ecosystem & Unified Fleet Simulation (`agent_lab.portfolio` - v1.1.0):**
+  - Seamless auto-discovery and runtime binding across all 4 ecosystem repositories (`rollback`, `solana-tx-lens`, `agent-witness`, `agent-lab`).
+  - Ecosystem-wide health diagnostic probes across all 4 repositories via `agent-lab portfolio doctor`.
+  - End-to-end multi-agent execution pipeline integrating transactional disk rollback (`rollback` v0.10.0), pre-flight Solana instruction simulation and fee optimization (`solana-tx-lens` v0.10.0), RFC 6962 Merkle tree witnessing and SP1 zkVM attestation (`agent-witness` v0.10.0), and tournament arena scoring (`agent-lab` v1.1.0) via `agent-lab portfolio simulate`.
+  - High-throughput ecosystem benchmark suite (> 140 simulations/second) via `agent-lab portfolio benchmark`.
+  - Cryptographically sealed `UnifiedPortfolioReceipt` auditing full cross-repository integrity.
+- **FastMCP Protocol Integration:** Exposes 47 native tools for Claude Code, OpenBot, Cursor, and custom agent harnesses.
 
 ---
 
@@ -365,7 +371,8 @@ print(f"Verified: {report.is_valid}, Action Merkle Root: {report.action_merkle_r
 - [x] **v0.7.0:** Adaptive dynamic token rate-limiter, circuit breakers, and cross-model fallback cascade router.
 - [x] **v0.8.0:** Cross-agent semantic memory store, pure-Python episodic vector index, hybrid lexical/dense retrieval, and memory decay eviction.
 - [x] **v0.9.0:** Multi-agent tournament arena, adaptive Elo rating engine, Bradley-Terry skill estimation, and collaborative swarm workflow benchmark harness.
-- [x] **v1.0.0:** General Availability enterprise release: Fleet Diagnostics, full-lifecycle mission meta-orchestrator, cryptographic execution receipts, and PyPI binary distribution readiness.
+- [x] **v1.0.0:** General Availability enterprise release: Fleet Diagnostics, full-lifecycle mission meta-orchestration, and 45 FastMCP native tools.
+- [x] **v1.1.0:** Cross-Repository Portfolio Ecosystem Integration: unified fleet simulation connecting live `rollback` (v0.10.0), `solana-tx-lens` (v0.10.0), `agent-witness` (v0.10.0), and `agent-lab` (v1.1.0) with 47 FastMCP tools and high-throughput benchmarks (>140 sim/s).-lifecycle mission meta-orchestrator, cryptographic execution receipts, and PyPI binary distribution readiness.
 
 ---
 

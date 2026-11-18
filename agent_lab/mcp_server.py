@@ -78,6 +78,13 @@ from agent_lab.fleet import (
     FleetExecutionReceipt,
     MissionConfig,
 )
+from agent_lab.portfolio import (
+    PortfolioDiscovery,
+    PortfolioDoctor,
+    PortfolioHealthStatus,
+    CrossRepoFleetSimulator,
+    UnifiedPortfolioReceipt,
+)
 
 # Default global orchestrator and collector
 _config = AgentLabConfig.load()
@@ -96,6 +103,8 @@ _fleet_runner = FleetMissionRunner(
     coordinator=_coordinator,
     arena=_arena_leaderboard,
 )
+_portfolio_doctor = PortfolioDoctor()
+_portfolio_simulator = CrossRepoFleetSimulator()
 
 
 def agentlab_session_start(agent_name: str, goal: str) -> str:
@@ -1140,6 +1149,58 @@ def agentlab_fleet_verify_receipt(receipt_json: str) -> str:
         })
     except Exception as e:
         return json.dumps({"status": "error", "error": str(e)})
+
+
+def agentlab_portfolio_get_status() -> str:
+    """Inspect availability, versions, and capabilities of all four portfolio repositories."""
+    try:
+        disco = PortfolioDiscovery.discover_all()
+        return json.dumps({
+            "status": "success",
+            "portfolio": {k: v.to_dict() for k, v in disco.items()},
+        })
+    except Exception as e:
+        return json.dumps({"status": "error", "error": str(e)})
+
+
+def agentlab_portfolio_run_doctor() -> str:
+    """Execute end-to-end diagnostic probes across rollback, solana-tx-lens, agent-witness, and agent-lab."""
+    try:
+        report = _portfolio_doctor.run_doctor()
+        return json.dumps({
+            "status": "success",
+            "report": report.to_dict(),
+        })
+    except Exception as e:
+        return json.dumps({"status": "error", "error": str(e)})
+
+
+def agentlab_portfolio_simulate_mission(
+    simulation_id: str = "sim_cross_001",
+    task_goal: str = "Autonomous code generation with transactional safety and on-chain settlement",
+) -> str:
+    """Execute a unified multi-agent mission exercising rollback, solana-tx-lens, agent-witness, and agent-lab."""
+    try:
+        receipt = _portfolio_simulator.run_simulation(simulation_id=simulation_id, task_goal=task_goal)
+        return json.dumps({
+            "status": "success",
+            "receipt": receipt.to_dict(),
+        })
+    except Exception as e:
+        return json.dumps({"status": "error", "error": str(e)})
+
+
+def agentlab_portfolio_benchmark(num_iterations: int = 10) -> str:
+    """Benchmark end-to-end cross-repository ecosystem throughput and latency percentiles."""
+    try:
+        stats = _portfolio_simulator.benchmark_portfolio(num_iterations=num_iterations)
+        return json.dumps({
+            "status": "success",
+            "benchmark": stats,
+        })
+    except Exception as e:
+        return json.dumps({"status": "error", "error": str(e)})
+
 
 
 

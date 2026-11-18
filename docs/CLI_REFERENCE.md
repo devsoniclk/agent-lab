@@ -347,5 +347,50 @@ Benchmark end-to-end fleet execution throughput, latency, and success rates acro
 agent-lab fleet benchmark [--count <int>] [--json]
 ```
 
+---
+
+## 12. `agent-lab portfolio`
+
+Cross-Repository Ecosystem Integration, Diagnostics & Unified Simulation (v1.1.0).
+
+### `agent-lab portfolio status`
+Inspect availability, versions, live status, and capability matrices across all 4 portfolio repositories (`rollback`, `solana-tx-lens`, `agent-witness`, `agent-lab`).
+
+```bash
+agent-lab portfolio status [--json]
+```
+
+### `agent-lab portfolio doctor`
+Execute end-to-end diagnostic probes across the 4 portfolio repositories:
+- `rollback`: Transactional micro-checkpoints and workspace rollbacks.
+- `solana-tx-lens`: Pre-flight instruction simulation and dynamic priority fee prediction.
+- `agent-witness`: RFC 6962 Merkle tree proofs and SP1 zkVM attestation.
+- `agent-lab`: Full fleet diagnostics across all internal sub-engines.
+
+```bash
+agent-lab portfolio doctor [--json]
+```
+
+### `agent-lab portfolio simulate`
+Execute an end-to-end multi-agent mission exercising the entire ecosystem simultaneously:
+1. Transactional micro-checkpointing via `rollback`.
+2. Episodic procedural memory retrieval and cascade routing via `agent-lab`.
+3. Rogue adversarial file mutation and atomic rollback revert via `rollback`.
+4. Pre-flight instruction simulation and priority fee calculation via `solana-tx-lens`.
+5. Deliberation witnessing, Merkle proofs, and SP1 zkVM attestation via `agent-witness`.
+6. Arena leaderboard scoring and Elo updates via `agent-lab`.
+7. Cryptographically sealed `UnifiedPortfolioReceipt` generation with SHA-256 seal.
+
+```bash
+agent-lab portfolio simulate [--id <sim_id>] [--goal <text>] [--json]
+```
+
+### `agent-lab portfolio benchmark`
+Benchmark cross-repository ecosystem throughput, operations/sec, and latency percentiles (p50, p95, p99) over configurable iterations.
+
+```bash
+agent-lab portfolio benchmark [--count <int>] [--json]
+```
+
 
 

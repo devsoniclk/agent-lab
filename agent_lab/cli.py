@@ -95,6 +95,13 @@ from agent_lab.fleet import (
     FleetExecutionReceipt,
     MissionConfig,
 )
+from agent_lab.portfolio import (
+    PortfolioDiscovery,
+    PortfolioDoctor,
+    PortfolioHealthStatus,
+    CrossRepoFleetSimulator,
+    UnifiedPortfolioReceipt,
+)
 
 console = Console()
 
@@ -2009,6 +2016,145 @@ def fleet_benchmark(count: int, as_json: bool) -> None:
     table.add_row("Elapsed Time", f"{stats['elapsed_seconds']:.2f} s")
     table.add_row("Missions / Second", f"{stats['missions_per_second']:.2f}")
     table.add_row("Average Latency", f"{stats['avg_latency_ms']:.1f} ms")
+
+    console.print(table)
+
+
+@main.group()
+def portfolio() -> None:
+    """Cross-Repository Ecosystem Integration, Diagnostics & Unified Simulation."""
+    pass
+
+
+@portfolio.command("status")
+@click.option("--json", "as_json", is_flag=True, help="Output portfolio discovery status as JSON.")
+def portfolio_status(as_json: bool) -> None:
+    """Inspect availability, versions, and capabilities of all 4 portfolio repositories."""
+    components = PortfolioDiscovery.discover_all()
+
+    if as_json:
+        data = {k: v.to_dict() for k, v in components.items()}
+        click.echo(json.dumps(data, indent=2))
+        return
+
+    table = Table(title="Autonomous Open-Source Ecosystem: Portfolio Status")
+    table.add_column("Repository", style="cyan bold")
+    table.add_column("Version", style="yellow")
+    table.add_column("Available", justify="center")
+    table.add_column("Live Package", justify="center")
+    table.add_column("Capabilities", style="dim")
+
+    for name, info in components.items():
+        avail_str = "[green]YES[/green]" if info.is_available else "[red]NO[/red]"
+        live_str = "[green]YES[/green]" if info.is_live_package else "[dim]NO[/dim]"
+        caps = ", ".join(info.capabilities[:3]) + (f" (+{len(info.capabilities)-3})" if len(info.capabilities) > 3 else "")
+        table.add_row(name, info.version, avail_str, live_str, caps)
+
+    console.print(table)
+
+
+@portfolio.command("doctor")
+@click.option("--json", "as_json", is_flag=True, help="Output portfolio health report as JSON.")
+def portfolio_doctor(as_json: bool) -> None:
+    """Execute end-to-end diagnostic probes across rollback, solana-tx-lens, agent-witness, and agent-lab."""
+    doctor = PortfolioDoctor()
+    report = doctor.run_doctor()
+
+    if as_json:
+        click.echo(report.to_json())
+        return
+
+    table = Table(title=f"Portfolio Doctor Diagnostics ({report.status.value})")
+    table.add_column("Repository", style="cyan bold")
+    table.add_column("Version", style="yellow")
+    table.add_column("Status", style="bold")
+    table.add_column("Latency (ms)", justify="right")
+    table.add_column("Message", style="dim")
+
+    for check in report.checks:
+        c = "green" if check.status == PortfolioHealthStatus.HEALTHY else ("yellow" if check.status == PortfolioHealthStatus.DEGRADED else "red")
+        table.add_row(
+            check.subsystem,
+            check.version,
+            f"[{c}]{check.status.value}[/{c}]",
+            f"{check.latency_ms:.2f}",
+            check.message,
+        )
+
+    console.print(table)
+    overall_msg = "[bold green]All 4 portfolio repositories operational and healthy.[/bold green]" if report.all_healthy else "[bold red]One or more portfolio repositories degraded or failing.[/bold red]"
+    console.print(Panel(
+        f"{overall_msg}\n"
+        f"Timestamp: [cyan]{report.timestamp}[/cyan]\n"
+        f"Active Components: [yellow]{len(report.checks)}/4[/yellow]",
+        title="Ecosystem Health Status",
+    ))
+
+
+@portfolio.command("simulate")
+@click.option("--id", "sim_id", default="sim_cross_001", help="Unique simulation identifier.")
+@click.option("--goal", default="Autonomous code generation with transactional safety and on-chain settlement", help="Task objective.")
+@click.option("--json", "as_json", is_flag=True, help="Output simulation receipt as JSON.")
+def portfolio_simulate(sim_id: str, goal: str, as_json: bool) -> None:
+    """Execute unified multi-agent mission exercising rollback, solana-tx-lens, agent-witness, and agent-lab."""
+    simulator = CrossRepoFleetSimulator()
+    receipt = simulator.run_simulation(simulation_id=sim_id, task_goal=goal)
+
+    if as_json:
+        click.echo(receipt.to_json())
+        return
+
+    status_color = "green" if receipt.status == "SUCCESS" else "red"
+    console.print(Panel(
+        f"[bold]Simulation ID:[/bold] {receipt.simulation_id}\n"
+        f"[bold]Status:[/bold] [{status_color}]{receipt.status}[/{status_color}]\n"
+        f"[bold]Latency:[/bold] {receipt.latency_ms:.2f} ms\n"
+        f"[bold]Ecosystem Versions:[/bold] " + ", ".join([f"{k}={v}" for k, v in receipt.component_versions.items()]) + "\n\n"
+        f"[bold cyan]1. Rollback Session (rollback):[/bold cyan]\n"
+        f"  - Atomic Rollback Applied: {'[green]YES[/green]' if receipt.rollback_applied else '[red]NO[/red]'}\n"
+        f"  - Corrupt Files Reverted: [green]{receipt.corrupt_files_reverted}[/green]\n"
+        f"  - Restored Clean Hash: [dim]{receipt.clean_workspace_hash[:16]}...[/dim]\n\n"
+        f"[bold cyan]2. Pre-Flight Simulation (solana-tx-lens):[/bold cyan]\n"
+        f"  - Simulation Verified: {'[green]YES[/green]' if receipt.solana_sim_success else '[red]NO[/red]'}\n"
+        f"  - Compute Units Consumed: [yellow]{receipt.solana_cu_consumed:,}[/yellow] CU\n"
+        f"  - Dynamic Priority Fee: [yellow]{receipt.solana_priority_fee_micro_lamports:,}[/yellow] micro-lamports/CU\n\n"
+        f"[bold cyan]3. Deliberation Attestation (agent-witness):[/bold cyan]\n"
+        f"  - Merkle Tree Root: [dim]{receipt.witness_merkle_root[:24]}...[/dim] ({receipt.witness_step_count} steps)\n"
+        f"  - SP1 zkVM Receipt Verified: {'[green]YES[/green]' if receipt.zkvm_receipt_verified else '[red]NO[/red]'}\n"
+        f"  - Journal Digest: [dim]{receipt.zkvm_journal_digest[:24]}...[/dim]\n\n"
+        f"[bold cyan]4. Meta-Orchestrator Fleet (agent-lab):[/bold cyan]\n"
+        f"  - Routed Cascade Model: [green]{receipt.routed_model}[/green] (Memory Hits: {receipt.memory_hits})\n"
+        f"  - Arena Composite Score: [bold green]{receipt.arena_match_score:.1f}/100.0[/bold green]\n"
+        f"  - Verification Seal: [yellow]{receipt.sha256_seal[:32]}...[/yellow]",
+        title=f"Unified Portfolio Simulation Receipt: {receipt.simulation_id}",
+    ))
+
+
+@portfolio.command("benchmark")
+@click.option("--count", "-n", default=10, type=int, help="Number of simulated cross-repo missions to execute.")
+@click.option("--json", "as_json", is_flag=True, help="Output benchmark summary as JSON.")
+def portfolio_benchmark(count: int, as_json: bool) -> None:
+    """Benchmark end-to-end cross-repository ecosystem throughput and latency percentiles."""
+    simulator = CrossRepoFleetSimulator()
+    stats = simulator.benchmark_portfolio(num_iterations=count)
+
+    if as_json:
+        click.echo(json.dumps(stats, indent=2))
+        return
+
+    table = Table(title="Cross-Repository Portfolio Benchmark")
+    table.add_column("Metric", style="cyan")
+    table.add_column("Value", style="bold green")
+
+    table.add_row("Total Iterations", str(stats["num_iterations"]))
+    table.add_row("Successful Iterations", str(stats["success_count"]))
+    table.add_row("Success Rate", f"{stats['success_rate'] * 100:.1f}%")
+    table.add_row("Elapsed Time", f"{stats['elapsed_seconds']:.3f} s")
+    table.add_row("Simulations / Second", f"{stats['simulations_per_second']:.2f}")
+    table.add_row("Average Latency", f"{stats['avg_latency_ms']:.2f} ms")
+    table.add_row("p50 Latency", f"{stats['latency_p50_ms']:.2f} ms")
+    table.add_row("p95 Latency", f"{stats['latency_p95_ms']:.2f} ms")
+    table.add_row("p99 Latency", f"{stats['latency_p99_ms']:.2f} ms")
 
     console.print(table)
 

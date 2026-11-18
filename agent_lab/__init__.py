@@ -109,8 +109,18 @@ from agent_lab.fleet import (
     FleetExecutionReceipt,
     FleetMissionRunner,
 )
+from agent_lab.portfolio import (
+    PortfolioHealthStatus,
+    PortfolioComponentInfo,
+    PortfolioDiscovery,
+    PortfolioSubsystemCheck,
+    PortfolioDoctorReport,
+    PortfolioDoctor,
+    UnifiedPortfolioReceipt,
+    CrossRepoFleetSimulator,
+)
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 __all__ = [
     "AgentLabConfig",
     "AgentLabOrchestrator",
@@ -206,4 +216,12 @@ __all__ = [
     "MissionConfig",
     "FleetExecutionReceipt",
     "FleetMissionRunner",
+    "PortfolioHealthStatus",
+    "PortfolioComponentInfo",
+    "PortfolioDiscovery",
+    "PortfolioSubsystemCheck",
+    "PortfolioDoctorReport",
+    "PortfolioDoctor",
+    "UnifiedPortfolioReceipt",
+    "CrossRepoFleetSimulator",
 ]
