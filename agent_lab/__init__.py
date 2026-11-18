@@ -56,8 +56,28 @@ from agent_lab.leaderboard import (
     LeaderboardDashboard,
     DEFAULT_MODEL_PRICING_CATALOG,
 )
+from agent_lab.router import (
+    AgentPriority,
+    CircuitState,
+    RateLimitPolicy,
+    CircuitBreakerPolicy,
+    AgentQuota,
+    RoutingAttempt,
+    RoutingExecutionReceipt,
+    TokenGovernor,
+    ModelCircuitBreaker,
+    FallbackRoute,
+    AdaptiveModelRouter,
+    DEFAULT_MODEL_POLICIES,
+    DEFAULT_FALLBACK_ROUTES,
+    RouterError,
+    RateLimitExceededError,
+    CircuitBreakerOpenError,
+    QuotaExceededError,
+    CascadeExhaustedError,
+)
 
-__version__ = "0.6.0"
+__version__ = "0.7.0"
 __all__ = [
     "AgentLabConfig",
     "AgentLabOrchestrator",
@@ -108,4 +128,22 @@ __all__ = [
     "TokenEconomicsSimulator",
     "LeaderboardDashboard",
     "DEFAULT_MODEL_PRICING_CATALOG",
+    "AgentPriority",
+    "CircuitState",
+    "RateLimitPolicy",
+    "CircuitBreakerPolicy",
+    "AgentQuota",
+    "RoutingAttempt",
+    "RoutingExecutionReceipt",
+    "TokenGovernor",
+    "ModelCircuitBreaker",
+    "FallbackRoute",
+    "AdaptiveModelRouter",
+    "DEFAULT_MODEL_POLICIES",
+    "DEFAULT_FALLBACK_ROUTES",
+    "RouterError",
+    "RateLimitExceededError",
+    "CircuitBreakerOpenError",
+    "QuotaExceededError",
+    "CascadeExhaustedError",
 ]

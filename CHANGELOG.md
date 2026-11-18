@@ -5,6 +5,33 @@ All notable changes to `agent-lab` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-11-18
+
+### Added
+- **Adaptive Dynamic Token Rate-Limiter & Sliding-Window Token Governor (`TokenGovernor`)**:
+  - High-throughput rolling 60-second sliding-window request (RPM) and token (TPM) governor.
+  - Priority-tiered capacity allowances (`CRITICAL` 1.20x burst, `HIGH` 1.00x, `NORMAL` 0.85x, `BACKGROUND` 0.65x).
+  - Dynamic concurrency slot tracking, reservation, and safe release preventing provider saturation.
+  - Granular per-agent token consumption budgets and quota enforcement (`AgentQuota`, `QuotaExceededError`).
+- **3-State Provider Circuit Breakers (`ModelCircuitBreaker`)**:
+  - Full state-machine transitions: `CLOSED` (healthy) -> `OPEN` (fail-fast) -> `HALF_OPEN` (canary testing).
+  - Cooldown recovery with configurable randomized jitter mitigating thundering herd problems.
+  - Latency SLA tracking: automatically trips circuit if rolling 5-call average latency exceeds SLA threshold.
+  - Fail-fast trip triggers on consecutive failures, canary probe re-trips, and HTTP 429 rate limit errors.
+- **Cross-Model Cascade Fallback Router (`AdaptiveModelRouter`)**:
+  - Intelligent multi-model fallback cascade routing (`code-generation`, `reasoning-deliberation`, `fast-synthesis`).
+  - Cryptographic and operational execution receipts (`RoutingExecutionReceipt`) tracking attempt histories, latency, token consumption, and accurate cost calculations.
+  - Telemetry recording integration with `TelemetryCollector.record_routing_event`.
+- **Router CLI Command Group (`agent-lab router`)**:
+  - `agent-lab router status`: Displays rich terminal status of fleet circuit breakers, RPM/TPM utilization, and cascade configurations with JSON export option.
+  - `agent-lab router route`: Dispatches prompts through adaptive fallback cascades with priority flags and simulated failover testing.
+  - `agent-lab router reset-circuit`: Resets individual or all model circuit breakers to CLOSED.
+  - `agent-lab router benchmark-resilience`: Simulates high-concurrency swarm workloads under synthetic provider faults to measure resilience rates and failover latency.
+- **FastMCP Protocol Extensions**:
+  - Added 4 new native tools: `agentlab_router_route`, `agentlab_router_get_fleet_status`, `agentlab_router_reset_circuit`, `agentlab_router_benchmark_resilience` (expanding FastMCP tool suite to 33 tools).
+- **Expanded Test Suite**:
+  - Added 29 new unit and integration tests across `tests/test_router.py`, `tests/test_cli_v7.py`, `tests/test_mcp_v7.py`, and `tests/test_v7_coverage_edges.py` (172 total tests, 100% pass rate, 93% code coverage).
+
 ## [0.6.0] - 2026-11-18
 
 ### Added

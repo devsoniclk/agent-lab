@@ -47,6 +47,10 @@ class TelemetryMetrics:
     total_inference_cost_usd: float = 0.0
     total_inference_calls: int = 0
     inference_latency_sum_ms: float = 0.0
+    router_routed_calls: int = 0
+    router_fallback_calls: int = 0
+    router_circuit_breaks: int = 0
+    router_throttled_calls: int = 0
 
 
 class TelemetryCollector:
@@ -137,6 +141,34 @@ class TelemetryCollector:
             },
         )
 
+    def record_routing_event(
+        self,
+        primary_model: str,
+        resolved_model: str,
+        fallback_occurred: bool,
+        latency_ms: float,
+        tokens: int,
+        priority: str = "NORMAL",
+        status: str = "success",
+    ) -> None:
+        """Record a model routing and fallback event."""
+        self.metrics.router_routed_calls += 1
+        if fallback_occurred:
+            self.metrics.router_fallback_calls += 1
+        self._add_event(
+            "router",
+            "execution",
+            {
+                "primary_model": primary_model,
+                "resolved_model": resolved_model,
+                "fallback_occurred": fallback_occurred,
+                "latency_ms": latency_ms,
+                "tokens": tokens,
+                "priority": priority,
+                "status": status,
+            },
+        )
+
     def avg_inference_latency_ms(self) -> float:
         """Calculate mean inference latency in milliseconds."""
         if self.metrics.total_inference_calls == 0:
@@ -208,6 +240,10 @@ class TelemetryCollector:
             total_inference_cost_usd=m.get("total_inference_cost_usd", 0.0),
             total_inference_calls=m.get("total_inference_calls", 0),
             inference_latency_sum_ms=m.get("inference_latency_sum_ms", 0.0),
+            router_routed_calls=m.get("router_routed_calls", 0),
+            router_fallback_calls=m.get("router_fallback_calls", 0),
+            router_circuit_breaks=m.get("router_circuit_breaks", 0),
+            router_throttled_calls=m.get("router_throttled_calls", 0),
         )
         for ev in data.get("events", []):
             collector.events.append(
@@ -233,6 +269,7 @@ class TelemetryCollector:
 - **Benchmark Evaluations:** {m['eval_tasks_run']} (Passed: {m['eval_tasks_passed']}, Pass Rate: {m['eval_pass_rate'] * 100:.1f}%)
 - **Trajectory Evaluations:** {m['trajectories_evaluated']} (Mean Tool F1: {m['average_tool_f1']:.4f}, Loops Caught: {m['loops_detected']})
 - **Model Inference Calls:** {m['total_inference_calls']} (Tokens: {m['total_prompt_tokens'] + m['total_completion_tokens']:,}, Cost: ${m['total_inference_cost_usd']:.4f}, Avg Latency: {m['avg_inference_latency_ms']:.1f}ms)
+- **Model Router & Fallbacks:** {m['router_routed_calls']} routed ({m['router_fallback_calls']} fallbacks, {m['router_circuit_breaks']} circuit trips)
 """
 
     def render_dashboard(self, console: Optional[Console] = None) -> None:
@@ -271,6 +308,12 @@ class TelemetryCollector:
                 "Model Inference Calls",
                 f"{m['total_inference_calls']} calls (${m['total_inference_cost_usd']:.4f})",
                 f"Avg Latency: {m['avg_inference_latency_ms']:.1f}ms",
+            )
+        if m["router_routed_calls"] > 0:
+            eval_table.add_row(
+                "Router Dynamic Cascade",
+                f"{m['router_routed_calls']} routed ({m['router_fallback_calls']} fallbacks)",
+                f"{m['router_circuit_breaks']} Circuit Trips",
             )
 
         con.print(Panel(ops_table, title="[bold cyan]Agent-Lab Operational Dashboard[/bold cyan]"))

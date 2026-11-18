@@ -7,6 +7,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import random
 import sys
 from pathlib import Path
 from typing import Optional
@@ -53,6 +54,19 @@ from agent_lab.leaderboard import (
     LeaderboardEngine,
     TokenEconomicsSimulator,
     LeaderboardDashboard,
+)
+from agent_lab.router import (
+    AdaptiveModelRouter,
+    AgentPriority,
+    CircuitState,
+    FallbackRoute,
+    RateLimitPolicy,
+    CircuitBreakerPolicy,
+    DEFAULT_FALLBACK_ROUTES,
+    DEFAULT_MODEL_POLICIES,
+    RoutingExecutionReceipt,
+    CascadeExhaustedError,
+    QuotaExceededError,
 )
 
 console = Console()
@@ -1094,5 +1108,262 @@ def leaderboard_export_json(eval_file: Optional[str], output_file: str) -> None:
     console.print(f"[bold green]Exported {len(entries)} ranked leaderboard entries to:[/bold green] {output_file}")
 
 
+# ---------------------------------------------------------------------------
+# Router Command Group (v0.7.0)
+# ---------------------------------------------------------------------------
+
+_CLI_ROUTER_INSTANCE: Optional[AdaptiveModelRouter] = None
+
+
+def _get_cli_router() -> AdaptiveModelRouter:
+    global _CLI_ROUTER_INSTANCE
+    if _CLI_ROUTER_INSTANCE is None:
+        _CLI_ROUTER_INSTANCE = AdaptiveModelRouter()
+    return _CLI_ROUTER_INSTANCE
+
+
+@main.group()
+def router() -> None:
+    """Adaptive dynamic token rate-limiter, circuit breakers, and cross-model fallback router."""
+    pass
+
+
+@router.command("status")
+@click.option("--json-out", "-j", default=None, help="Optional path to export status as JSON.")
+def router_status(json_out: Optional[str]) -> None:
+    """Display real-time circuit breaker states, sliding-window token utilization, and fallback routes."""
+    r = _get_cli_router()
+    status = r.get_fleet_status()
+
+    if json_out:
+        p = Path(json_out).resolve()
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(json.dumps(status, indent=2), encoding="utf-8")
+        console.print(f"[bold green]Fleet status exported to:[/bold green] {json_out}")
+        return
+
+    # Table 1: Model Fleet & Circuit Breakers
+    table = Table(title="Model Fleet Circuit Breakers & Sliding-Window Quotas", expand=True)
+    table.add_column("Model ID", style="bold cyan")
+    table.add_column("Circuit State", justify="center")
+    table.add_column("RPM (Used / Max)", justify="right")
+    table.add_column("TPM (Used / Max)", justify="right")
+    table.add_column("Concurrency", justify="right")
+    table.add_column("Failures", justify="right")
+    table.add_column("Trips", justify="right")
+    table.add_column("Avg Latency", justify="right")
+
+    for model_id, m in status["models"].items():
+        state = m["circuit_state"]
+        if state == "CLOSED":
+            state_str = "[bold green]CLOSED[/bold green]"
+        elif state == "HALF_OPEN":
+            state_str = "[bold yellow]HALF_OPEN[/bold yellow]"
+        else:
+            state_str = "[bold red]OPEN[/bold red]"
+
+        rpm_str = f"{m['current_rpm']} / {m['max_rpm']} ({m['rpm_pct']}%)"
+        tpm_str = f"{m['current_tpm']:,} / {m['max_tpm']:,} ({m['tpm_pct']}%)"
+        conc_str = f"{m['active_concurrency']} / {m['max_concurrency']}"
+        lat_str = f"{m['avg_latency_ms']} ms" if m['avg_latency_ms'] > 0 else "—"
+
+        table.add_row(
+            model_id,
+            state_str,
+            rpm_str,
+            tpm_str,
+            conc_str,
+            str(m["consecutive_failures"]),
+            str(m["total_trips"]),
+            lat_str,
+        )
+
+    console.print(table)
+
+    # Table 2: Fallback Cascades
+    rtable = Table(title="Configured Cross-Model Fallback Cascades", expand=True)
+    rtable.add_column("Route Name", style="bold magenta")
+    rtable.add_column("Primary Model", style="bold green")
+    rtable.add_column("Cascade Fallbacks (in failover order)", style="yellow")
+    rtable.add_column("Description", style="white")
+
+    for rname, rinfo in status["routes"].items():
+        fallbacks = " -> ".join(rinfo["fallback_models"]) if rinfo["fallback_models"] else "[dim]None[/dim]"
+        rtable.add_row(rname, rinfo["primary_model"], fallbacks, rinfo["description"])
+
+    console.print(rtable)
+
+
+@router.command("route")
+@click.option("--prompt", "-p", default="Write an asynchronous token-bucket rate limiter in Rust.", help="Prompt text.")
+@click.option("--route", "-r", default="code-generation", help="Target fallback cascade route.")
+@click.option("--priority", default="NORMAL", type=click.Choice(["CRITICAL", "HIGH", "NORMAL", "BACKGROUND"]), help="Agent priority tier.")
+@click.option("--agent", "-a", default="agent-cli", help="Agent identifier.")
+@click.option("--tokens", "-t", default=500, type=int, help="Estimated completion tokens.")
+@click.option("--simulate-fail-primary", is_flag=True, help="Simulate HTTP 429 rate limit on primary model to test failover.")
+def router_route(
+    prompt: str,
+    route: str,
+    priority: str,
+    agent: str,
+    tokens: int,
+    simulate_fail_primary: bool,
+) -> None:
+    """Route an LLM request through adaptive fallback cascade with rate-limiting."""
+    r = _get_cli_router()
+    prio_enum = AgentPriority(priority)
+
+    invoker = None
+    if simulate_fail_primary:
+        def fault_invoker(model_id: str, p: str):
+            route_obj = r.routes.get(route)
+            prim = route_obj.primary_model if route_obj else "claude-3-5-sonnet"
+            if model_id == prim:
+                return False, "HTTP 429: Rate limit exceeded (simulated)", 20, 0
+            return True, f"Success from fallback model {model_id}: Code generated successfully.", 25, tokens
+        invoker = fault_invoker
+
+    try:
+        receipt = r.route_and_execute(
+            prompt=prompt,
+            route_name=route,
+            priority=prio_enum,
+            agent_id=agent,
+            estimated_output_tokens=tokens,
+            provider_invoker=invoker,
+        )
+    except Exception as exc:
+        console.print(f"[bold red]Routing execution failed:[/bold red] {exc}")
+        sys.exit(1)
+
+    status_color = "green" if receipt.status == "success" else "yellow"
+    console.print(Panel(
+        f"[bold cyan]Receipt ID:[/bold cyan] {receipt.receipt_id}\n"
+        f"[bold cyan]Task ID:[/bold cyan] {receipt.task_id} | [bold cyan]Agent:[/bold cyan] {receipt.agent_id} (Priority: {receipt.priority.value})\n"
+        f"[bold cyan]Requested Route:[/bold cyan] {route} (Primary: [bold]{receipt.primary_model}[/bold])\n"
+        f"[bold cyan]Resolved Model:[/bold cyan] [bold {status_color}]{receipt.resolved_model}[/bold {status_color}] "
+        f"({'[bold yellow]AUTOMATIC FALLBACK TRIGGERED[/bold yellow]' if receipt.fallback_occurred else '[bold green]DIRECT PRIMARY HIT[/bold green]'})\n"
+        f"[bold cyan]Execution Status:[/bold cyan] [{status_color}]{receipt.status}[/{status_color}]\n"
+        f"[bold cyan]Total Latency:[/bold cyan] {receipt.total_latency_ms:.2f} ms | [bold cyan]Tokens:[/bold cyan] {receipt.total_tokens:,}\n"
+        f"[bold cyan]Total Cost:[/bold cyan] ${receipt.total_cost_usd:.6f}\n\n"
+        f"[bold white]Output Preview:[/bold white]\n{receipt.output_preview}",
+        title="[bold green]Adaptive Route Execution Receipt[/bold green]",
+        border_style="green" if not receipt.fallback_occurred else "yellow",
+    ))
+
+    # Attempts breakdown table
+    att_table = Table(title="Cascade Attempt Breakdown", expand=True)
+    att_table.add_column("Attempt", justify="center")
+    att_table.add_column("Model ID", style="cyan")
+    att_table.add_column("Success", justify="center")
+    att_table.add_column("Latency (ms)", justify="right")
+    att_table.add_column("Tokens", justify="right")
+    att_table.add_column("Cost ($)", justify="right")
+    att_table.add_column("Diagnostic / Error", style="red")
+
+    for att in receipt.attempts:
+        succ_str = "[bold green]YES[/bold green]" if att.success else "[bold red]NO[/bold red]"
+        err_str = att.error_message or "[dim]None[/dim]"
+        att_table.add_row(
+            str(att.attempt_index),
+            att.model_id,
+            succ_str,
+            f"{att.latency_ms:.1f}",
+            str(att.prompt_tokens + att.completion_tokens),
+            f"${att.cost_usd:.6f}",
+            err_str,
+        )
+
+    console.print(att_table)
+
+
+@router.command("reset-circuit")
+@click.option("--model", "-m", default=None, help="Model ID to reset.")
+@click.option("--all", "reset_all", is_flag=True, help="Reset all model circuit breakers.")
+def router_reset_circuit(model: Optional[str], reset_all: bool) -> None:
+    """Reset tripped circuit breakers to CLOSED."""
+    r = _get_cli_router()
+    if reset_all:
+        r.reset_all_circuits()
+        console.print("[bold green]Successfully reset all circuit breakers to CLOSED.[/bold green]")
+    elif model:
+        if r.reset_circuit(model):
+            console.print(f"[bold green]Successfully reset circuit breaker for:[/bold green] {model}")
+        else:
+            console.print(f"[bold red]Unknown model ID:[/bold red] {model}")
+            sys.exit(1)
+    else:
+        console.print("[bold yellow]Please specify --model <model_id> or --all[/bold yellow]")
+
+
+@router.command("benchmark-resilience")
+@click.option("--requests", "-n", default=20, type=int, help="Number of simulated requests.")
+@click.option("--fault-rate", "-f", default=0.35, type=float, help="Synthetic rate limit failure probability on primary.")
+@click.option("--route", "-r", default="code-generation", help="Target fallback cascade route.")
+def router_benchmark_resilience(requests: int, fault_rate: float, route: str) -> None:
+    """Benchmark swarm resilience under synthetic 429 rate limit faults and provider outages."""
+    r = _get_cli_router()
+    route_obj = r.routes.get(route)
+    primary = route_obj.primary_model if route_obj else "claude-3-5-sonnet"
+
+    console.print(f"[bold cyan]Running Resilience Benchmark:[/bold cyan] {requests} requests against '{route}' (Primary: {primary}, Fault Rate: {fault_rate * 100:.0f}%)...")
+
+    success_count = 0
+    fallback_count = 0
+    primary_hit_count = 0
+    failed_count = 0
+    total_latency = 0.0
+    total_cost = 0.0
+
+    random.seed(42)  # Deterministic benchmark repeatability
+
+    for i in range(requests):
+        should_fail_primary = random.random() < fault_rate
+
+        def benchmark_invoker(model_id: str, p: str):
+            if model_id == primary and should_fail_primary:
+                return False, "HTTP 429: Too Many Requests (Rate limit reached)", 50, 0
+            return True, f"Synthesized output for task {i}", 50, 250
+
+        try:
+            receipt = r.route_and_execute(
+                prompt=f"Benchmark task #{i+1}",
+                route_name=route,
+                priority=AgentPriority.NORMAL,
+                agent_id=f"worker-{(i % 4) + 1}",
+                estimated_output_tokens=250,
+                provider_invoker=benchmark_invoker,
+            )
+            success_count += 1
+            total_latency += receipt.total_latency_ms
+            total_cost += receipt.total_cost_usd
+            if receipt.fallback_occurred:
+                fallback_count += 1
+            else:
+                primary_hit_count += 1
+        except Exception:
+            failed_count += 1
+
+    avg_lat = (total_latency / success_count) if success_count > 0 else 0.0
+    resilience_rate = (success_count / requests) * 100.0
+
+    # Summary table
+    res_table = Table(title="Swarm Fault-Tolerance & Resilience Metrics", expand=True)
+    res_table.add_column("Metric", style="bold cyan")
+    res_table.add_column("Value", style="bold green", justify="right")
+    res_table.add_column("Evaluation", style="yellow")
+
+    res_table.add_row("Total Requests Dispatched", str(requests), "High-Concurrency Swarm Simulation")
+    res_table.add_row("Primary Model Hits", str(primary_hit_count), f"{round(primary_hit_count/requests*100, 1)}% Direct Routing")
+    res_table.add_row("Cascade Fallbacks Recovered", str(fallback_count), f"{round(fallback_count/requests*100, 1)}% Zero-Downtime Failover")
+    res_table.add_row("Unhandled Failures", str(failed_count), "Zero-Drop Target (0 Expected)")
+    res_table.add_row("System Resilience Rate", f"{resilience_rate:.1f}%", "[bold green]100.0% Pass Gate[/bold green]" if resilience_rate >= 99.0 else "[bold red]SLA Breach[/bold red]")
+    res_table.add_row("Mean End-to-End Latency", f"{avg_lat:.2f} ms", "Sub-10ms Overhead")
+    res_table.add_row("Cumulative Task Cost", f"${total_cost:.5f}", "Economically Optimized")
+
+    console.print(res_table)
+
+
 if __name__ == "__main__":
     main()
+

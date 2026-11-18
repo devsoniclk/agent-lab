@@ -45,6 +45,14 @@ from agent_lab.leaderboard import (
     TokenEconomicsSimulator,
     LeaderboardDashboard,
 )
+from agent_lab.router import (
+    AdaptiveModelRouter,
+    AgentPriority,
+    CircuitState,
+    FallbackRoute,
+    RoutingExecutionReceipt,
+    TokenGovernor,
+)
 
 # Default global orchestrator and collector
 _config = AgentLabConfig.load()
@@ -52,6 +60,7 @@ _orchestrator = AgentLabOrchestrator(_config)
 _registry = AnchorAgentRegistryClient()
 _coordinator = SwarmCoordinator(workspace_root=_config.workspace_root, registry_client=_registry)
 _telemetry = TelemetryCollector()
+_router = AdaptiveModelRouter()
 
 
 def agentlab_session_start(agent_name: str, goal: str) -> str:
@@ -647,5 +656,167 @@ def agentlab_leaderboard_export_html(
         })
     except Exception as e:
         return json.dumps({"status": "error", "error": str(e)})
+
+
+# ---------------------------------------------------------------------------
+# Router & Rate-Limiter Tools (v0.7.0)
+# ---------------------------------------------------------------------------
+
+
+def agentlab_router_route(
+    prompt: str = "Write an asynchronous token-bucket rate limiter in Rust.",
+    route: str = "code-generation",
+    priority: str = "NORMAL",
+    agent_id: str = "agent-mcp",
+    tokens: int = 500,
+    simulate_fail_primary: bool = False,
+) -> str:
+    """Route an LLM request through adaptive fallback cascade with rate-limiting and circuit breakers."""
+    try:
+        prio_enum = AgentPriority(priority)
+        invoker = None
+        if simulate_fail_primary:
+            route_obj = _router.routes.get(route)
+            prim = route_obj.primary_model if route_obj else "claude-3-5-sonnet"
+
+            def fault_invoker(model_id: str, p: str):
+                if model_id == prim:
+                    return False, "HTTP 429: Rate limit exceeded (simulated)", 20, 0
+                return True, f"Success from fallback model {model_id}: Code generated successfully.", 25, tokens
+
+            invoker = fault_invoker
+
+        receipt = _router.route_and_execute(
+            prompt=prompt,
+            route_name=route,
+            priority=prio_enum,
+            agent_id=agent_id,
+            estimated_output_tokens=tokens,
+            provider_invoker=invoker,
+        )
+
+        # Record in telemetry
+        _telemetry.record_routing_event(
+            primary_model=receipt.primary_model,
+            resolved_model=receipt.resolved_model,
+            fallback_occurred=receipt.fallback_occurred,
+            latency_ms=receipt.total_latency_ms,
+            tokens=receipt.total_tokens,
+            priority=receipt.priority.value,
+            status=receipt.status,
+        )
+
+        return json.dumps({
+            "status": "success",
+            "receipt": receipt.to_dict(),
+        })
+    except Exception as e:
+        return json.dumps({"status": "error", "error": str(e)})
+
+
+def agentlab_router_get_fleet_status(model_id: str = "") -> str:
+    """Return circuit breaker states, sliding-window RPM/TPM quotas, and active fallback cascades."""
+    try:
+        status = _router.get_fleet_status()
+        if model_id and model_id in status["models"]:
+            return json.dumps({
+                "status": "success",
+                "model_id": model_id,
+                "model_status": status["models"][model_id],
+            })
+        return json.dumps({
+            "status": "success",
+            "fleet_status": status,
+        })
+    except Exception as e:
+        return json.dumps({"status": "error", "error": str(e)})
+
+
+def agentlab_router_reset_circuit(model_id: str = "", reset_all: bool = True) -> str:
+    """Reset tripped circuit breakers to CLOSED state across the model fleet."""
+    try:
+        if reset_all or not model_id:
+            _router.reset_all_circuits()
+            return json.dumps({
+                "status": "success",
+                "message": "All model circuit breakers reset to CLOSED.",
+            })
+        success = _router.reset_circuit(model_id)
+        if success:
+            return json.dumps({
+                "status": "success",
+                "message": f"Circuit breaker for '{model_id}' reset to CLOSED.",
+            })
+        return json.dumps({
+            "status": "error",
+            "error": f"Unknown model '{model_id}'",
+        })
+    except Exception as e:
+        return json.dumps({"status": "error", "error": str(e)})
+
+
+def agentlab_router_benchmark_resilience(
+    requests: int = 20,
+    fault_rate: float = 0.35,
+    route: str = "code-generation",
+) -> str:
+    """Benchmark swarm resilience and zero-downtime failover under synthetic 429 faults."""
+    import random
+    try:
+        route_obj = _router.routes.get(route)
+        primary = route_obj.primary_model if route_obj else "claude-3-5-sonnet"
+
+        success_count = 0
+        fallback_count = 0
+        primary_hit_count = 0
+        failed_count = 0
+        total_latency = 0.0
+        total_cost = 0.0
+
+        rng = random.Random(42)
+
+        for i in range(requests):
+            should_fail = rng.random() < fault_rate
+
+            def bench_invoker(m_id: str, p: str):
+                if m_id == primary and should_fail:
+                    return False, "HTTP 429: Rate limit exceeded (synthetic)", 15, 0
+                return True, f"Response from {m_id}", 20, 200
+
+            try:
+                receipt = _router.route_and_execute(
+                    prompt=f"Task {i}",
+                    route_name=route,
+                    agent_id=f"bench-agent-{i % 4}",
+                    estimated_output_tokens=200,
+                    provider_invoker=bench_invoker,
+                )
+                success_count += 1
+                total_latency += receipt.total_latency_ms
+                total_cost += receipt.total_cost_usd
+                if receipt.fallback_occurred:
+                    fallback_count += 1
+                else:
+                    primary_hit_count += 1
+            except Exception:
+                failed_count += 1
+
+        resilience_rate = (success_count / requests) * 100.0 if requests > 0 else 0.0
+        return json.dumps({
+            "status": "success",
+            "requests": requests,
+            "route": route,
+            "primary_model": primary,
+            "fault_rate": fault_rate,
+            "resilience_rate_pct": round(resilience_rate, 2),
+            "primary_hits": primary_hit_count,
+            "fallback_recoveries": fallback_count,
+            "unhandled_failures": failed_count,
+            "mean_latency_ms": round(total_latency / max(1, success_count), 2),
+            "total_cost_usd": round(total_cost, 6),
+        })
+    except Exception as e:
+        return json.dumps({"status": "error", "error": str(e)})
+
 
 

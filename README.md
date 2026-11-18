@@ -124,7 +124,13 @@ flowchart TD
   - Cryptographic equivocation slashing engine executing 50% collateral burns and 50% reporter rewards, reputation penalties (-2500 bps), and moving offenders to `JAILED` status.
   - Complete Anchor Program IDL (`ANCHOR_AGENT_REGISTRY_IDL`) with instructions, accounts, and error codes.
   - CLI commands (`agent-lab registry register`, `stake`, `info`, `list`, `slash-proof`, `export-idl`).
-- **FastMCP Protocol Integration:** Exposes 29 native tools for Claude Code, OpenBot, Cursor, and custom agent harnesses.
+- **Adaptive Dynamic Token Rate-Limiter & Cross-Model Router:**
+  - High-throughput rolling 60-second sliding-window request (RPM) and token (TPM) governor (`TokenGovernor`).
+  - Priority-tiered capacity allowances (`CRITICAL` 1.20x, `HIGH` 1.00x, `NORMAL` 0.85x, `BACKGROUND` 0.65x) and concurrency slot protection.
+  - 3-State circuit breakers (`ModelCircuitBreaker`) with automated cooldown recovery, canary probes, and latency SLA violation detection.
+  - Cross-model cascade fallback routing (`AdaptiveModelRouter`) with cryptographic receipts and zero-drop failover.
+  - Interactive CLI commands (`agent-lab router status`, `route`, `reset-circuit`, `benchmark-resilience`).
+- **FastMCP Protocol Integration:** Exposes 33 native tools for Claude Code, OpenBot, Cursor, and custom agent harnesses.
 
 ---
 
@@ -339,6 +345,7 @@ print(f"Verified: {report.is_valid}, Action Merkle Root: {report.action_merkle_r
 - [x] **v0.4.0:** Solana Anchor on-chain agent registry, economic staking, and cryptographic equivocation slashing engine.
 - [x] **v0.5.0:** Autonomous Zero-Knowledge execution and deliberation verification via zkVM receipts (RISC Zero & SP1) and ZK-guarded swarm consensus.
 - [x] **v0.6.0:** Cross-agent unified benchmark leaderboard, multi-model token economics, Pareto frontier analysis, and interactive dark-theme SVG dashboard.
+- [x] **v0.7.0:** Adaptive dynamic token rate-limiter, circuit breakers, and cross-model fallback cascade router.
 - [ ] **v1.0.0:** General Availability enterprise release with PyPI binary distributions.
 
 ---

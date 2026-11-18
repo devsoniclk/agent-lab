@@ -199,3 +199,31 @@ Export structured JSON schema of ranked leaderboard entries for CI/CD pipelines 
 ```bash
 agent-lab leaderboard export-json [--eval-file <path>] -o <output.json>
 ```
+
+### `agent-lab router status`
+Display real-time circuit breaker states, sliding-window token utilization (RPM/TPM), active concurrency, and configured cross-model fallback cascades.
+
+```bash
+agent-lab router status [--json-out <path>]
+```
+
+### `agent-lab router route`
+Route an LLM task through adaptive fallback cascade with rate-limiting, priority reservation, and automatic circuit breaker failover.
+
+```bash
+agent-lab router route [--prompt "<text>"] [--route <route_name>] [--priority CRITICAL|HIGH|NORMAL|BACKGROUND] [--agent <agent_id>] [--tokens <int>] [--simulate-fail-primary]
+```
+
+### `agent-lab router reset-circuit`
+Reset tripped model circuit breakers back to CLOSED operational state.
+
+```bash
+agent-lab router reset-circuit [--model <model_id>] [--all]
+```
+
+### `agent-lab router benchmark-resilience`
+Benchmark swarm routing resilience, zero-downtime failover rate, and end-to-end latency under synthetic HTTP 429 rate limit faults.
+
+```bash
+agent-lab router benchmark-resilience [--requests <int>] [--fault-rate <float>] [--route <route_name>]
+```
