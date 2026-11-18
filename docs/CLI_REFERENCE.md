@@ -101,3 +101,52 @@ Export cross-agent operational telemetry to Markdown or structured JSON.
 ```bash
 agent-lab telemetry export [--format markdown|json] [--output <path>]
 ```
+
+### `agent-lab registry init`
+Initialize a Solana Anchor agent registry configuration file.
+
+```bash
+agent-lab registry init [--storage <path>] [--min-stake <lamports>] [--penalty-bps <bps>]
+```
+
+### `agent-lab registry register`
+Register an autonomous agent validator with on-chain collateral stake.
+
+```bash
+agent-lab registry register --pubkey <pubkey> --name <name> [--stake <lamports>] [--metadata <uri>] [--storage <path>]
+```
+
+### `agent-lab registry stake`
+Deposit additional SOL stake into an agent validator account.
+
+```bash
+agent-lab registry stake --pubkey <pubkey> --amount <lamports> [--storage <path>]
+```
+
+### `agent-lab registry info`
+Query an agent validator's on-chain account, stake, reputation, and BFT consensus eligibility.
+
+```bash
+agent-lab registry info --pubkey <pubkey> [--storage <path>]
+```
+
+### `agent-lab registry list`
+List all registered agents and their stake/reputation metrics in an interactive terminal table.
+
+```bash
+agent-lab registry list [--storage <path>]
+```
+
+### `agent-lab registry slash-proof`
+Submit a cryptographic equivocation proof to slash offender collateral and jail Byzantine nodes.
+
+```bash
+agent-lab registry slash-proof --offender <pubkey> --reporter <pubkey> --proposal <id> --vote-a <decision> --vote-b <decision> [--storage <path>]
+```
+
+### `agent-lab registry export-idl`
+Export the production-ready Anchor Program IDL specification for agent registry.
+
+```bash
+agent-lab registry export-idl [--out <path>]
+```
