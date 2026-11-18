@@ -10,15 +10,10 @@ Edge case and coverage tests for agent_lab v0.6.0:
 
 from __future__ import annotations
 
-import pytest
-
 from agent_lab.leaderboard import (
     AgentEvaluationRecord,
-    DEFAULT_MODEL_PRICING_CATALOG,
     LeaderboardDashboard,
     LeaderboardEngine,
-    LeaderboardEntry,
-    ModelPricing,
     TokenEconomicsSimulator,
 )
 from agent_lab.telemetry import TelemetryCollector

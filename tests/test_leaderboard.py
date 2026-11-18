@@ -6,12 +6,10 @@ composite scoring, Pareto frontier, token economics simulator, and dashboard exp
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 import pytest
 
 from agent_lab.leaderboard import (
-    DEFAULT_MODEL_PRICING_CATALOG,
     AgentEvaluationRecord,
     LeaderboardDashboard,
     LeaderboardEngine,

@@ -49,13 +49,10 @@ from agent_lab.zk import (
     DEFAULT_SP1_VKEY,
 )
 from agent_lab.leaderboard import (
-    ModelPricing,
     AgentEvaluationRecord,
-    LeaderboardEntry,
     LeaderboardEngine,
     TokenEconomicsSimulator,
     LeaderboardDashboard,
-    DEFAULT_MODEL_PRICING_CATALOG,
 )
 
 console = Console()

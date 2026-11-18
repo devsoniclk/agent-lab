@@ -7,10 +7,8 @@ from __future__ import annotations
 
 import html
 import json
-import math
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from agent_lab.eval import StatisticalInterval
