@@ -100,8 +100,17 @@ from agent_lab.arena import (
     SwarmWorkflowReport,
     SwarmWorkflowHarness,
 )
+from agent_lab.fleet import (
+    FleetHealthStatus,
+    FleetSubsystemCheck,
+    FleetHealthReport,
+    FleetDiagnostics,
+    MissionConfig,
+    FleetExecutionReceipt,
+    FleetMissionRunner,
+)
 
-__version__ = "0.9.0"
+__version__ = "1.0.0"
 __all__ = [
     "AgentLabConfig",
     "AgentLabOrchestrator",
@@ -190,4 +199,11 @@ __all__ = [
     "SwarmWorkflowStage",
     "SwarmWorkflowReport",
     "SwarmWorkflowHarness",
+    "FleetHealthStatus",
+    "FleetSubsystemCheck",
+    "FleetHealthReport",
+    "FleetDiagnostics",
+    "MissionConfig",
+    "FleetExecutionReceipt",
+    "FleetMissionRunner",
 ]

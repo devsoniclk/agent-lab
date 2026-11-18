@@ -70,6 +70,14 @@ from agent_lab.arena import (
     SwarmWorkflowReport,
     SwarmWorkflowStage,
 )
+from agent_lab.fleet import (
+    FleetDiagnostics,
+    FleetHealthReport,
+    FleetHealthStatus,
+    FleetMissionRunner,
+    FleetExecutionReceipt,
+    MissionConfig,
+)
 
 # Default global orchestrator and collector
 _config = AgentLabConfig.load()
@@ -81,6 +89,13 @@ _router = AdaptiveModelRouter()
 _memory_store = CrossAgentMemoryStore()
 _arena_leaderboard = ArenaLeaderboard()
 _workflow_harness = SwarmWorkflowHarness()
+_fleet_diagnostics = FleetDiagnostics()
+_fleet_runner = FleetMissionRunner(
+    memory_store=_memory_store,
+    router=_router,
+    coordinator=_coordinator,
+    arena=_arena_leaderboard,
+)
 
 
 def agentlab_session_start(agent_name: str, goal: str) -> str:
@@ -1058,6 +1073,75 @@ def agentlab_arena_export_ratings(export_path: str = "") -> str:
         })
     except Exception as e:
         return json.dumps({"status": "error", "error": str(e)})
+
+
+def agentlab_fleet_run_diagnostics(verbose: bool = True) -> str:
+    """Execute deep self-diagnostics across all core agent-lab sub-engines."""
+    try:
+        report = _fleet_diagnostics.run_diagnostics()
+        return json.dumps({
+            "status": "success",
+            "report": report.to_dict(),
+        })
+    except Exception as e:
+        return json.dumps({"status": "error", "error": str(e)})
+
+
+def agentlab_fleet_run_mission(
+    mission_id: str = "mission_ga_001",
+    goal: str = "Implement and verify cryptographic hash utility",
+    agents_csv: str = "agent-alpha,agent-beta,agent-gamma",
+    simulate_failover: bool = False,
+) -> str:
+    """Execute an end-to-end full-lifecycle multi-agent mission and generate cryptographic receipt."""
+    try:
+        agents = [a.strip() for a in agents_csv.split(",") if a.strip()]
+        if len(agents) < 3:
+            agents = ["agent-alpha", "agent-beta", "agent-gamma"]
+        cfg = MissionConfig(
+            mission_id=mission_id,
+            goal=goal,
+            agents=agents,
+            simulate_failover=simulate_failover,
+        )
+        receipt = _fleet_runner.execute_mission(cfg)
+        return json.dumps({
+            "status": "success",
+            "receipt": receipt.to_dict(),
+        })
+    except Exception as e:
+        return json.dumps({"status": "error", "error": str(e)})
+
+
+def agentlab_fleet_benchmark(num_missions: int = 5) -> str:
+    """Benchmark sequential mission throughput, latency, and success rates across the fleet."""
+    try:
+        results = _fleet_runner.benchmark_fleet(num_missions=num_missions)
+        return json.dumps({
+            "status": "success",
+            "benchmark": results,
+        })
+    except Exception as e:
+        return json.dumps({"status": "error", "error": str(e)})
+
+
+def agentlab_fleet_verify_receipt(receipt_json: str) -> str:
+    """Verify cryptographic sha256 seal integrity of a FleetExecutionReceipt."""
+    try:
+        data = json.loads(receipt_json)
+        receipt = FleetExecutionReceipt(**data)
+        is_valid = receipt.verify_seal()
+        return json.dumps({
+            "status": "success",
+            "valid": is_valid,
+            "mission_id": receipt.mission_id,
+            "computed_seal": receipt.compute_seal(),
+            "claimed_seal": receipt.sha256_seal,
+        })
+    except Exception as e:
+        return json.dumps({"status": "error", "error": str(e)})
+
+
 
 
 

@@ -87,6 +87,14 @@ from agent_lab.arena import (
     SwarmWorkflowReport,
     SwarmWorkflowHarness,
 )
+from agent_lab.fleet import (
+    FleetDiagnostics,
+    FleetHealthReport,
+    FleetHealthStatus,
+    FleetMissionRunner,
+    FleetExecutionReceipt,
+    MissionConfig,
+)
 
 console = Console()
 
@@ -115,7 +123,8 @@ def init(workspace: str) -> None:
 
 
 @main.command()
-def doctor() -> None:
+@click.option("--deep", is_flag=True, help="Run deep self-diagnostics across all sub-engines.")
+def doctor(deep: bool) -> None:
     """Diagnose local environment and portfolio integrations."""
     table = Table(title="Agent-Lab Integration Diagnostics")
     table.add_column("Component", style="cyan")
@@ -139,6 +148,24 @@ def doctor() -> None:
     )
 
     console.print(table)
+
+    if deep:
+        diag = FleetDiagnostics()
+        report = diag.run_diagnostics()
+        sub_table = Table(title=f"Fleet Subsystem Health Check ({report.status.value})")
+        sub_table.add_column("Subsystem", style="cyan")
+        sub_table.add_column("Status", style="bold")
+        sub_table.add_column("Latency (ms)", justify="right")
+        sub_table.add_column("Message", style="dim")
+        for check in report.checks:
+            color = "green" if check.status.value == "HEALTHY" else ("yellow" if check.status.value == "DEGRADED" else "red")
+            sub_table.add_row(
+                check.subsystem,
+                f"[{color}]{check.status.value}[/{color}]",
+                f"{check.latency_ms:.2f}",
+                check.message,
+            )
+        console.print(sub_table)
 
 
 @main.group()
@@ -1872,6 +1899,118 @@ def arena_import(file: str) -> None:
         console.print(f"[bold red]Import failed:[/bold red] {e}")
         sys.exit(1)
 
+
+@main.group()
+def fleet() -> None:
+    """Full-Lifecycle Multi-Agent Fleet Diagnostics, Missions & Benchmarks."""
+    pass
+
+
+@fleet.command("doctor")
+@click.option("--json", "as_json", is_flag=True, help="Output health report as JSON.")
+def fleet_doctor(as_json: bool) -> None:
+    """Execute deep self-diagnostics across all core agent-lab sub-engines."""
+    diag = FleetDiagnostics()
+    report = diag.run_diagnostics()
+
+    if as_json:
+        click.echo(report.to_json())
+        return
+
+    status_color = "green" if report.status == FleetHealthStatus.HEALTHY else ("yellow" if report.status == FleetHealthStatus.DEGRADED else "red")
+    table = Table(title=f"Fleet Diagnostics ({report.status.value}) - agent-lab v{report.version}")
+    table.add_column("Subsystem", style="cyan")
+    table.add_column("Status", style="bold")
+    table.add_column("Latency (ms)", justify="right")
+    table.add_column("Message", style="dim")
+
+    for check in report.checks:
+        c = "green" if check.status == FleetHealthStatus.HEALTHY else ("yellow" if check.status == FleetHealthStatus.DEGRADED else "red")
+        table.add_row(
+            check.subsystem,
+            f"[{c}]{check.status.value}[/{c}]",
+            f"{check.latency_ms:.2f}",
+            check.message,
+        )
+
+    console.print(table)
+    overall_msg = "[bold green]All sub-engines operational and healthy.[/bold green]" if report.all_healthy else "[bold red]One or more sub-engines degraded or failing.[/bold red]"
+    console.print(Panel(
+        f"{overall_msg}\n"
+        f"Timestamp: [cyan]{report.timestamp}[/cyan]\n"
+        f"Version: [yellow]{report.version}[/yellow]",
+        title="Fleet Status",
+    ))
+
+
+@fleet.command("run-mission")
+@click.option("--id", "mission_id", default="mission_ga_001", help="Unique mission identifier.")
+@click.option("--goal", default="Implement and verify cryptographic hash utility", help="Mission objective description.")
+@click.option("--agents", default="agent-alpha,agent-beta,agent-gamma", help="Comma-separated agent names.")
+@click.option("--failover", is_flag=True, help="Simulate upstream provider outage to test cascade router failover.")
+@click.option("--json", "as_json", is_flag=True, help="Output receipt as JSON.")
+def fleet_run_mission(mission_id: str, goal: str, agents: str, failover: bool, as_json: bool) -> None:
+    """Execute an end-to-end full-lifecycle multi-agent mission with cryptographic receipt."""
+    agent_list = [a.strip() for a in agents.split(",") if a.strip()]
+    if len(agent_list) < 3:
+        console.print("[bold red]Fleet missions require at least 3 agents for BFT quorum.[/bold red]")
+        sys.exit(1)
+
+    cfg = MissionConfig(
+        mission_id=mission_id,
+        goal=goal,
+        agents=agent_list,
+        simulate_failover=failover,
+    )
+    runner = FleetMissionRunner()
+    receipt = runner.execute_mission(cfg)
+
+    if as_json:
+        click.echo(receipt.to_json())
+        return
+
+    status_color = "green" if receipt.status == "SUCCESS" else "red"
+    console.print(Panel(
+        f"[bold]Mission ID:[/bold] {receipt.mission_id}\n"
+        f"[bold]Status:[/bold] [{status_color}]{receipt.status}[/{status_color}]\n"
+        f"[bold]Routed Model:[/bold] {receipt.routed_model} (Attempts: {receipt.routing_attempts})\n"
+        f"[bold]Memory Hits:[/bold] {receipt.memory_hits}\n"
+        f"[bold]BFT Consensus:[/bold] {'[green]APPROVED[/green]' if receipt.consensus_approved else '[red]REJECTED[/red]'}\n"
+        f"[bold]Consensus Merkle Root:[/bold] [dim]{receipt.consensus_merkle_root[:24]}...[/dim]\n"
+        f"[bold]ZK Proof Verified:[/bold] {'[green]YES (SP1 zkVM)[/green]' if receipt.zk_verified else '[red]NO[/red]'}\n"
+        f"[bold]AST Syntax Valid:[/bold] {'[green]YES[/green]' if receipt.syntax_valid else '[red]NO[/red]'}\n"
+        f"[bold]Trajectory F1 Score:[/bold] [bold green]{receipt.trajectory_f1 * 100:.1f}%[/bold green]\n"
+        f"[bold]Loop Detected:[/bold] {'[red]YES[/red]' if receipt.loop_detected else '[green]NO[/green]'}\n"
+        f"[bold]Arena Composite Score:[/bold] {receipt.arena_match_score:.1f}/100.0\n"
+        f"[bold]Cryptographic Seal:[/bold] [yellow]{receipt.sha256_seal[:32]}...[/yellow]",
+        title=f"Fleet Mission Execution Receipt: {receipt.mission_id}",
+    ))
+
+
+@fleet.command("benchmark")
+@click.option("--count", "-n", default=5, type=int, help="Number of simulated missions to execute.")
+@click.option("--json", "as_json", is_flag=True, help="Output benchmark summary as JSON.")
+def fleet_benchmark(count: int, as_json: bool) -> None:
+    """Benchmark end-to-end fleet execution throughput across multiple missions."""
+    runner = FleetMissionRunner()
+    stats = runner.benchmark_fleet(num_missions=count)
+
+    if as_json:
+        click.echo(json.dumps(stats, indent=2))
+        return
+
+    table = Table(title="Fleet Mission Throughput Benchmark")
+    table.add_column("Metric", style="cyan")
+    table.add_column("Value", style="bold green")
+
+    table.add_row("Total Missions", str(stats["num_missions"]))
+    table.add_row("Successful Missions", str(stats["success_count"]))
+    table.add_row("Success Rate", f"{stats['success_rate'] * 100:.1f}%")
+    table.add_row("Elapsed Time", f"{stats['elapsed_seconds']:.2f} s")
+    table.add_row("Missions / Second", f"{stats['missions_per_second']:.2f}")
+    table.add_row("Average Latency", f"{stats['avg_latency_ms']:.1f} ms")
+
+    console.print(table)
 
 
 if __name__ == "__main__":

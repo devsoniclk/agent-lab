@@ -320,4 +320,32 @@ Import arena leaderboard state and match history from a JSON backup file.
 agent-lab arena import -f <arena_backup.json>
 ```
 
+---
+
+## 11. `agent-lab fleet`
+
+Full-Lifecycle Multi-Agent Fleet Diagnostics, Missions & Benchmarks (v1.0.0 General Availability).
+
+### `agent-lab fleet doctor`
+Execute deep self-diagnostics across all 6 core agent-lab sub-engines (semantic memory, adaptive router, BFT consensus, ZK deliberation, tournament arena, eval harness).
+
+```bash
+agent-lab fleet doctor [--json]
+```
+
+### `agent-lab fleet run-mission`
+Execute an end-to-end full-lifecycle multi-agent mission combining semantic memory pre-fetching, adaptive fallback cascade routing, BFT deliberation consensus, zero-knowledge deliberation receipts, and arena Elo rating updates.
+
+```bash
+agent-lab fleet run-mission [--id <mission_id>] [--goal <text>] [--agents <csv>] [--failover] [--json]
+```
+
+### `agent-lab fleet benchmark`
+Benchmark end-to-end fleet execution throughput, latency, and success rates across multiple sequential missions.
+
+```bash
+agent-lab fleet benchmark [--count <int>] [--json]
+```
+
+
 

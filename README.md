@@ -142,7 +142,12 @@ flowchart TD
   - Unified composite match scoring balancing correctness (50%), AST validity (20%), trajectory rule compliance (15%), and token efficiency (15%).
   - Multi-agent collaborative DAG workflow evaluation harness measuring stage latency, token consumption, BFT consensus rounds, and coordination efficiency (`SwarmWorkflowHarness`).
   - Interactive CLI commands (`agent-lab arena match`, `tournament`, `ratings`, `benchmark-swarm`, `export`, `import`).
-- **FastMCP Protocol Integration:** Exposes 41 native tools for Claude Code, OpenBot, Cursor, and custom agent harnesses.
+- **Unified Fleet Diagnostics & Mission Meta-Orchestrator (`agent_lab.fleet` - v1.0.0 GA):**
+  - Instant self-diagnostics across all 6 sub-engines (memory, router, BFT consensus, ZK deliberation, arena, eval) via `agent-lab fleet doctor`.
+  - Full-lifecycle multi-agent mission execution combining memory pre-fetch, adaptive model fallback routing, BFT consensus, SP1 zkVM attestation, AST verification, and arena rating updates via `agent-lab fleet run-mission`.
+  - Sub-millisecond sequential mission throughput benchmarking via `agent-lab fleet benchmark`.
+  - Cryptographically sealed `FleetExecutionReceipt` with verifiable SHA-256 integrity seal.
+- **FastMCP Protocol Integration:** Exposes 45 native tools for Claude Code, OpenBot, Cursor, and custom agent harnesses.
 
 ---
 
@@ -360,7 +365,7 @@ print(f"Verified: {report.is_valid}, Action Merkle Root: {report.action_merkle_r
 - [x] **v0.7.0:** Adaptive dynamic token rate-limiter, circuit breakers, and cross-model fallback cascade router.
 - [x] **v0.8.0:** Cross-agent semantic memory store, pure-Python episodic vector index, hybrid lexical/dense retrieval, and memory decay eviction.
 - [x] **v0.9.0:** Multi-agent tournament arena, adaptive Elo rating engine, Bradley-Terry skill estimation, and collaborative swarm workflow benchmark harness.
-- [ ] **v1.0.0:** General Availability enterprise release with PyPI binary distributions.
+- [x] **v1.0.0:** General Availability enterprise release: Fleet Diagnostics, full-lifecycle mission meta-orchestrator, cryptographic execution receipts, and PyPI binary distribution readiness.
 
 ---
 
