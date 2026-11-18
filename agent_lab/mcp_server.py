@@ -18,6 +18,12 @@ from agent_lab.eval import (
     StatisticalInterval,
 )
 from agent_lab.telemetry import TelemetryCollector
+from agent_lab.distributed import (
+    DistributedCoordinator,
+    DistributedSwarmNode,
+    NetworkMessage,
+    MessageType,
+)
 
 # Default global orchestrator and collector
 _config = AgentLabConfig.load()
@@ -158,4 +164,53 @@ def agentlab_doctor() -> str:
             "storage_dir": _config.storage_dir,
             "env": _config.env,
         }
+    })
+
+
+def agentlab_swarm_status() -> str:
+    """Retrieve active swarm consensus coordinator status, peers, and round history."""
+    return json.dumps({
+        "status": "success",
+        "committed_versions": len(_coordinator.committed_versions),
+        "slashed_validators": list(_coordinator.slashed_validators),
+        "quorum_ratio": _coordinator.quorum_ratio,
+    })
+
+
+def agentlab_swarm_broadcast_proposal(
+    proposal_id: str,
+    proposer: str,
+    target_file: str,
+    content: str,
+    description: str = "",
+) -> str:
+    """Submit a change set proposal for swarm consensus."""
+    import hashlib
+    content_bytes = content.encode("utf-8")
+    content_hash = hashlib.sha256(content_bytes).hexdigest()
+
+    proposal = SwarmProposal(
+        proposal_id=proposal_id,
+        proposer=proposer,
+        description=description,
+        read_set={},
+        write_set={target_file: content_hash},
+        file_mutations={target_file: content_bytes},
+    )
+
+    # Execute round with default local validator
+    vote = SwarmVote(voter="coordinator", proposal_id=proposal_id, decision=True)
+    res = _coordinator.run_consensus_round(
+        proposal=proposal,
+        votes=[vote],
+        validators={"coordinator": 1.0},
+    )
+
+    return json.dumps({
+        "status": "success",
+        "committed": res.committed,
+        "round_id": res.round_id,
+        "applied_files": res.applied_files,
+        "conflicts": res.conflicts,
+        "duration_ms": res.duration_ms,
     })

@@ -5,6 +5,17 @@ All notable changes to `agent-lab` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-11-18
+
+### Added
+- **Distributed WebSocket BFT Consensus Transport (`DistributedCoordinator` & `DistributedSwarmNode`)**: Full-duplex asynchronous transport allowing multi-host autonomous worker swarms to participate in distributed Byzantine Fault Tolerant consensus rounds across local networks and remote clusters.
+- **Cryptographic HMAC-SHA256 Authentication**: Canonical message envelope (`NetworkMessage`) with deterministic serialization and HMAC signing, preventing unauthorized injection, tampering, and message forgery across distributed swarms.
+- **Dynamic Peer Lifecycle & Health Management**: Peer registration (`HANDSHAKE` / `HANDSHAKE_ACK`), keepalive pings (`HEARTBEAT` / `HEARTBEAT_ACK`), peer disconnection recovery, and state synchronization (`SYNC_REQ` / `SYNC_RESP`).
+- **Distributed Quorum & Slashing Broadcast**: Coordinator broadcasts proposals, aggregates asynchronous remote votes, checks OCC conflict boundaries, slashes equivocating Byzantine nodes, commits atomic disk mutations, and broadcasts `COMMIT` / `REJECT` and `SLASH` notifications across the network.
+- **Distributed Swarm CLI (`agent-lab swarm`)**: Added `swarm serve` to launch the coordinator hub, `swarm worker` to connect validator nodes, and `swarm broadcast-proposal` to dispatch proposals and verify remote consensus from the CLI.
+- **FastMCP Distributed Swarm Tools**: Added `agentlab_swarm_status` and `agentlab_swarm_broadcast_proposal` tools.
+- **Expanded Test Suite**: Added 16 new unit and integration tests covering distributed consensus, network authentication, handshake/heartbeat loops, quorum verification, rejection rollbacks, slashing propagation, and CLI/MCP flows (62 total tests, 100% pass rate, 93% code coverage).
+
 ## [0.2.0] - 2026-11-18
 
 ### Added

@@ -4,6 +4,8 @@ agent_lab.cli: Command-Line Interface for Agent-Lab.
 
 from __future__ import annotations
 
+import asyncio
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -26,6 +28,12 @@ from agent_lab.eval import (
     StatisticalInterval,
 )
 from agent_lab.telemetry import TelemetryCollector
+from agent_lab.distributed import (
+    DistributedCoordinator,
+    DistributedSwarmNode,
+    NetworkMessage,
+    MessageType,
+)
 
 console = Console()
 
@@ -233,6 +241,143 @@ def telemetry_export(format: str, output: Optional[str]) -> None:
         console.print(f"[green]✓ Exported telemetry to {output}[/green]")
     else:
         console.print(content)
+
+
+@main.group()
+def swarm() -> None:
+    """Distributed WebSocket BFT swarm consensus coordinator and worker nodes."""
+    pass
+
+
+@swarm.command("serve")
+@click.option("--host", "-h", default="127.0.0.1", help="Host interface to bind.")
+@click.option("--port", "-p", default=8765, type=int, help="Port to listen on.")
+@click.option("--workspace", "-w", default=".", help="Workspace path to manage.")
+@click.option("--secret", "-s", default="", help="Shared secret for HMAC authentication.")
+@click.option("--quorum", "-q", default=0.67, type=float, help="Quorum ratio required for BFT consensus.")
+def swarm_serve(host: str, port: int, workspace: str, secret: str, quorum: float) -> None:
+    """Start the distributed WebSocket consensus coordinator server."""
+    coordinator = DistributedCoordinator(
+        workspace_root=workspace,
+        host=host,
+        port=port,
+        secret=secret,
+        quorum_ratio=quorum,
+    )
+
+    async def run_server() -> None:
+        await coordinator.start()
+        console.print(Panel(
+            f"[bold green]✓ Distributed Swarm Coordinator Active[/bold green]\n"
+            f"WebSocket URL: [cyan]ws://{host}:{coordinator.server_port}[/cyan]\n"
+            f"Workspace: [dim]{coordinator.workspace_root}[/dim]\n"
+            f"Quorum Ratio: [dim]{quorum:.2f}[/dim]\n"
+            f"Auth: [dim]{'HMAC-SHA256 Enabled' if secret else 'Open / Unauthenticated'}[/dim]",
+            title="Agent-Lab Swarm Hub",
+            border_style="green",
+        ))
+        try:
+            while True:
+                await asyncio.sleep(1)
+        except (KeyboardInterrupt, asyncio.CancelledError):
+            await coordinator.stop()
+
+    try:
+        asyncio.run(run_server())
+    except KeyboardInterrupt:
+        console.print("[yellow]Coordinator stopped by user.[/yellow]")
+
+
+@swarm.command("worker")
+@click.option("--url", "-u", default="ws://127.0.0.1:8765", help="Coordinator WebSocket URL.")
+@click.option("--node-id", "-n", required=True, help="Unique node identifier.")
+@click.option("--secret", "-s", default="", help="Shared secret for HMAC authentication.")
+@click.option("--weight", default=1.0, type=float, help="Validator voting weight.")
+def swarm_worker(url: str, node_id: str, secret: str, weight: float) -> None:
+    """Connect a worker validator node to a distributed coordinator."""
+    node = DistributedSwarmNode(
+        node_id=node_id,
+        coordinator_url=url,
+        secret=secret,
+        weight=weight,
+        vote_callback=lambda p: (True, "Auto-approved by policy"),
+    )
+
+    async def run_worker() -> None:
+        connected = await node.connect()
+        if not connected:
+            console.print(f"[bold red]✗ Failed connecting to coordinator at {url}[/bold red]")
+            sys.exit(1)
+
+        console.print(Panel(
+            f"[bold green]✓ Swarm Validator Node Connected[/bold green]\n"
+            f"Node ID: [cyan]{node_id}[/cyan]\n"
+            f"Weight: [dim]{weight}[/dim]\n"
+            f"Coordinator: [cyan]{url}[/cyan]",
+            title="Agent-Lab Swarm Worker",
+            border_style="green",
+        ))
+
+        try:
+            while node.is_connected:
+                msg = await node.listen_one(timeout=5.0)
+                if msg and msg.msg_type == MessageType.PROPOSAL:
+                    prop_id = msg.payload.get("proposal", {}).get("proposal_id", "")
+                    console.print(f"[cyan]→ Received proposal {prop_id}, auto-cast APPROVE vote[/cyan]")
+                elif msg and msg.msg_type == MessageType.COMMIT:
+                    console.print(f"[green]✓ Consensus COMMIT round completed for proposal {msg.payload.get('proposal_id')}[/green]")
+        except (KeyboardInterrupt, asyncio.CancelledError):
+            await node.disconnect()
+
+    try:
+        asyncio.run(run_worker())
+    except KeyboardInterrupt:
+        console.print("[yellow]Worker stopped by user.[/yellow]")
+
+
+@swarm.command("broadcast-proposal")
+@click.option("--workspace", "-w", default=".", help="Target workspace root.")
+@click.option("--proposal-id", "-p", required=True, help="Proposal ID.")
+@click.option("--proposer", required=True, help="Proposing agent name.")
+@click.option("--file", "-f", "target_file", required=True, help="Relative path of file to mutate.")
+@click.option("--content", "-c", required=True, help="New file content.")
+@click.option("--secret", "-s", default="", help="Shared HMAC secret.")
+@click.option("--port", default=8765, type=int, help="Coordinator port.")
+def swarm_broadcast_proposal(workspace: str, proposal_id: str, proposer: str, target_file: str, content: str, secret: str, port: int) -> None:
+    """Broadcast an atomic mutation proposal and run a consensus round."""
+    coordinator = DistributedCoordinator(
+        workspace_root=workspace,
+        port=port,
+        secret=secret,
+    )
+
+    async def run_broadcast() -> None:
+        await coordinator.start()
+        file_bytes = content.encode("utf-8")
+        proposal = SwarmProposal(
+            proposal_id=proposal_id,
+            proposer=proposer,
+            description="CLI broadcast proposal",
+            read_set={},
+            write_set={target_file: hashlib.sha256(file_bytes).hexdigest()},
+            file_mutations={target_file: file_bytes},
+        )
+        res = await coordinator.broadcast_proposal(proposal=proposal, timeout=1.0)
+        await coordinator.stop()
+
+        status_str = "[bold green]COMMITTED[/bold green]" if res.committed else "[bold red]REJECTED[/bold red]"
+        console.print(Panel(
+            f"Round ID: [cyan]{res.round_id}[/cyan]\n"
+            f"Proposal: [dim]{res.proposal_id}[/dim]\n"
+            f"Status: {status_str}\n"
+            f"Quorum Reached: [dim]{res.quorum_reached}[/dim]\n"
+            f"Applied Files: [dim]{res.applied_files}[/dim]\n"
+            f"Duration: [dim]{res.duration_ms} ms[/dim]",
+            title="Consensus Round Result",
+            border_style="green" if res.committed else "red",
+        ))
+
+    asyncio.run(run_broadcast())
 
 
 if __name__ == "__main__":

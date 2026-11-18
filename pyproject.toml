@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agent-lab"
-version = "0.2.0"
+version = "0.3.0"
 description = "Unified autonomous AI agent safety orchestrator, BFT swarm consensus coordinator, and evaluation benchmark harness"
 readme = "README.md"
 authors = [
@@ -41,6 +41,7 @@ dependencies = [
     "rich>=12.0.0",
     "cryptography>=41.0.0",
     "pydantic>=2.0.0",
+    "websockets>=12.0.0",
 ]
 
 [project.optional-dependencies]
@@ -70,3 +71,6 @@ include = ["agent_lab*"]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 addopts = "-v --strict-markers"
+markers = [
+    "asyncio: mark test as asyncio",
+]

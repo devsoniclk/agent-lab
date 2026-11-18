@@ -104,7 +104,11 @@ flowchart TD
 - **Cross-Agent Telemetry & Live Dashboard:**
   - Real-time aggregation of active sessions, micro-checkpoints, rollbacks, BFT consensus votes, and Solana simulations.
   - Interactive terminal dashboard (`agent-lab telemetry show`) and automated Markdown/JSON export.
-- **FastMCP Protocol Integration:** Exposes 13 native tools for Claude Code, OpenBot, Cursor, and custom agent harnesses.
+- **Distributed WebSocket BFT Swarm Transport:**
+  - Full-duplex asynchronous multi-host worker clustering over WebSockets with cryptographic HMAC-SHA256 message signing.
+  - Automatic peer registration, keepalive heartbeats, disconnection recovery, state synchronization (`SYNC_REQ`/`SYNC_RESP`), and slashing broadcast.
+  - Interactive CLI commands (`agent-lab swarm serve`, `agent-lab swarm worker`, `agent-lab swarm broadcast-proposal`).
+- **FastMCP Protocol Integration:** Exposes 15 native tools for Claude Code, OpenBot, Cursor, and custom agent harnesses.
 
 ---
 
@@ -232,6 +236,19 @@ print(f"Committed: {result.committed}, Quorum: {result.quorum_reached}")
 ### `StatisticalInterval`
 - `wilson_score_interval(successes, trials, confidence) -> tuple[float, float]`: Robust binomial proportion confidence intervals.
 
+### `DistributedCoordinator`
+- `start() -> None`: Binds and starts WebSocket consensus server.
+- `broadcast_proposal(proposal, timeout=3.0) -> SwarmConsensusResult`: Dispatches proposal over WebSockets to all connected peers, collects remote votes, verifies BFT quorum and OCC, applies mutations, and broadcasts commit/reject.
+- `broadcast(message, exclude=None) -> int`: Broadcasts authenticated network message.
+- `stop() -> None`: Closes connections and halts WebSocket listener.
+
+### `DistributedSwarmNode`
+- `connect() -> bool`: Connects to coordinator with HMAC handshake.
+- `send_vote(round_id, proposal_id, decision, reason=None) -> None`: Casts signed vote to coordinator.
+- `send_heartbeat() -> None`: Sends keepalive ping.
+- `listen_one(timeout=None) -> Optional[NetworkMessage]`: Receives next network message.
+- `disconnect() -> None`: Closes connection cleanly.
+
 ### `TelemetryCollector`
 - `record_session`, `record_checkpoint`, `record_rollback`, `record_consensus`, `record_eval`, `record_trajectory_eval`: Aggregates cross-agent lifecycle events.
 - `render_dashboard(console)`: Renders terminal dashboard.
@@ -263,6 +280,7 @@ print(f"Committed: {result.committed}, Quorum: {result.quorum_reached}")
 | **Pass@k Evaluation Harness** | **✓** | — | — | — |
 | **Tool Trajectory F1 & Loop Detection** | **✓** | — | — | — |
 | **Cross-Agent Telemetry Dashboard** | **✓** | — | — | — |
+| **Distributed WebSocket Swarm Transport** | **✓** | — | — | — |
 | **FastMCP Server Protocol** | **✓** | — | — | — |
 
 ---
@@ -271,7 +289,7 @@ print(f"Committed: {result.committed}, Quorum: {result.quorum_reached}")
 
 - [x] **v0.1.0:** Core meta-orchestrator, transactional sessions, BFT consensus coordinator, OCC conflict detection, Pass@k evaluation harness, and FastMCP server.
 - [x] **v0.2.0:** Multi-agent trajectory tool-use scoring (Precision/Recall/F1), loop & repetition detection, Wilson confidence intervals, benchmark suite execution (`humaneval_mini.json`), and cross-agent terminal telemetry dashboard.
-- [ ] **v0.3.0:** Distributed WebSocket consensus transport for multi-host worker swarms.
+- [x] **v0.3.0:** Distributed WebSocket consensus transport for multi-host worker swarms with HMAC-SHA256 authentication and state synchronization.
 - [ ] **v0.4.0:** Solana Anchor on-chain agent registry and staking contract integration.
 - [ ] **v0.5.0:** Zero-knowledge execution proofs via RISC Zero zkVM guest verification.
 - [ ] **v1.0.0:** General Availability enterprise release with PyPI binary distributions.

@@ -5,7 +5,7 @@ BFT swarm consensus coordinator, and evaluation benchmark harness.
 
 from agent_lab.config import AgentLabConfig
 from agent_lab.orchestrator import AgentLabOrchestrator, AgentSession
-from agent_lab.consensus import SwarmCoordinator, SwarmProposal, SwarmConsensusResult
+from agent_lab.consensus import SwarmCoordinator, SwarmProposal, SwarmConsensusResult, SwarmVote
 from agent_lab.eval import (
     BenchmarkHarness,
     PassAtKEstimator,
@@ -16,14 +16,22 @@ from agent_lab.eval import (
     BenchmarkTask,
 )
 from agent_lab.telemetry import TelemetryCollector, TelemetryMetrics, TelemetryEvent
+from agent_lab.distributed import (
+    DistributedCoordinator,
+    DistributedSwarmNode,
+    NetworkMessage,
+    MessageType,
+    PeerInfo,
+)
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 __all__ = [
     "AgentLabConfig",
     "AgentLabOrchestrator",
     "AgentSession",
     "SwarmCoordinator",
     "SwarmProposal",
+    "SwarmVote",
     "SwarmConsensusResult",
     "BenchmarkHarness",
     "PassAtKEstimator",
@@ -35,4 +43,9 @@ __all__ = [
     "TelemetryCollector",
     "TelemetryMetrics",
     "TelemetryEvent",
+    "DistributedCoordinator",
+    "DistributedSwarmNode",
+    "NetworkMessage",
+    "MessageType",
+    "PeerInfo",
 ]
