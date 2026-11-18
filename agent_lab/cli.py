@@ -48,6 +48,15 @@ from agent_lab.zk import (
     DEFAULT_RISC0_IMAGE_ID,
     DEFAULT_SP1_VKEY,
 )
+from agent_lab.leaderboard import (
+    ModelPricing,
+    AgentEvaluationRecord,
+    LeaderboardEntry,
+    LeaderboardEngine,
+    TokenEconomicsSimulator,
+    LeaderboardDashboard,
+    DEFAULT_MODEL_PRICING_CATALOG,
+)
 
 console = Console()
 
@@ -768,6 +777,324 @@ def zk_inspect(receipt_file: str) -> None:
         title="[bold magenta]ZKVM Receipt Details[/bold magenta]",
         border_style="magenta",
     ))
+
+
+def _get_default_sample_evaluations() -> list[AgentEvaluationRecord]:
+    return [
+        AgentEvaluationRecord(
+            agent_id="code-synthesizer-alpha",
+            model_id="claude-3-5-sonnet",
+            benchmark_suite="swe-bench-mini",
+            total_tasks=100,
+            passed_tasks=92,
+            pass_at_1=0.92,
+            tool_f1_score=0.94,
+            mean_latency_ms=1180.0,
+            p95_latency_ms=1850.0,
+            avg_prompt_tokens=1800,
+            avg_completion_tokens=650,
+            safety_violations=0,
+            zk_verified_rate=1.0,
+        ),
+        AgentEvaluationRecord(
+            agent_id="code-synthesizer-beta",
+            model_id="gpt-4o",
+            benchmark_suite="swe-bench-mini",
+            total_tasks=100,
+            passed_tasks=89,
+            pass_at_1=0.89,
+            tool_f1_score=0.91,
+            mean_latency_ms=1050.0,
+            p95_latency_ms=1720.0,
+            avg_prompt_tokens=1750,
+            avg_completion_tokens=600,
+            safety_violations=0,
+            zk_verified_rate=1.0,
+        ),
+        AgentEvaluationRecord(
+            agent_id="deepseek-agent-core",
+            model_id="deepseek-coder-v2",
+            benchmark_suite="swe-bench-mini",
+            total_tasks=100,
+            passed_tasks=86,
+            pass_at_1=0.86,
+            tool_f1_score=0.88,
+            mean_latency_ms=820.0,
+            p95_latency_ms=1340.0,
+            avg_prompt_tokens=1700,
+            avg_completion_tokens=580,
+            safety_violations=0,
+            zk_verified_rate=1.0,
+        ),
+        AgentEvaluationRecord(
+            agent_id="qwen-local-coder",
+            model_id="qwen-2.5-coder-32b",
+            benchmark_suite="swe-bench-mini",
+            total_tasks=100,
+            passed_tasks=84,
+            pass_at_1=0.84,
+            tool_f1_score=0.87,
+            mean_latency_ms=740.0,
+            p95_latency_ms=1210.0,
+            avg_prompt_tokens=1650,
+            avg_completion_tokens=550,
+            safety_violations=0,
+            zk_verified_rate=1.0,
+        ),
+        AgentEvaluationRecord(
+            agent_id="llama-general-worker",
+            model_id="llama-3.3-70b",
+            benchmark_suite="swe-bench-mini",
+            total_tasks=100,
+            passed_tasks=81,
+            pass_at_1=0.81,
+            tool_f1_score=0.84,
+            mean_latency_ms=790.0,
+            p95_latency_ms=1280.0,
+            avg_prompt_tokens=1600,
+            avg_completion_tokens=540,
+            safety_violations=1,
+            zk_verified_rate=0.98,
+        ),
+        AgentEvaluationRecord(
+            agent_id="gemini-multimodal-agent",
+            model_id="gemini-1.5-pro",
+            benchmark_suite="swe-bench-mini",
+            total_tasks=100,
+            passed_tasks=88,
+            pass_at_1=0.88,
+            tool_f1_score=0.89,
+            mean_latency_ms=1350.0,
+            p95_latency_ms=2100.0,
+            avg_prompt_tokens=2200,
+            avg_completion_tokens=700,
+            safety_violations=0,
+            zk_verified_rate=1.0,
+        ),
+        AgentEvaluationRecord(
+            agent_id="gemini-flash-router",
+            model_id="gemini-1.5-flash",
+            benchmark_suite="swe-bench-mini",
+            total_tasks=100,
+            passed_tasks=76,
+            pass_at_1=0.76,
+            tool_f1_score=0.82,
+            mean_latency_ms=410.0,
+            p95_latency_ms=690.0,
+            avg_prompt_tokens=1500,
+            avg_completion_tokens=480,
+            safety_violations=0,
+            zk_verified_rate=1.0,
+        ),
+    ]
+
+
+@main.group("leaderboard")
+def leaderboard() -> None:
+    """Cross-agent benchmark leaderboard, Pareto frontier & token economics commands."""
+    pass
+
+
+@leaderboard.command("generate")
+@click.option("--eval-file", "-f", default=None, help="Path to JSON file containing list of evaluation records.")
+@click.option("--sample", is_flag=True, default=False, help="Use built-in multi-model evaluation sample suite.")
+@click.option("--output-format", "-t", type=click.Choice(["table", "json", "markdown"]), default="table", help="Output format.")
+@click.option("--output-file", "-o", default=None, help="Optional file destination.")
+def leaderboard_generate(eval_file: Optional[str], sample: bool, output_format: str, output_file: Optional[str]) -> None:
+    """Generate ranked cross-agent benchmark leaderboard with composite scores and Pareto optimal tagging."""
+    if eval_file:
+        p = Path(eval_file)
+        if not p.is_file():
+            console.print(f"[bold red]File not found:[/bold red] {eval_file}")
+            sys.exit(1)
+        try:
+            raw = json.loads(p.read_text(encoding="utf-8"))
+            records = [AgentEvaluationRecord.from_dict(item) for item in raw]
+        except Exception as e:
+            console.print(f"[bold red]Failed to parse evaluation file:[/bold red] {e}")
+            sys.exit(1)
+    else:
+        records = _get_default_sample_evaluations()
+
+    entries = LeaderboardEngine.generate_leaderboard(records)
+
+    if output_format == "json":
+        rendered = LeaderboardDashboard.export_json(entries)
+    elif output_format == "markdown":
+        rendered = LeaderboardDashboard.export_markdown(entries)
+    else:
+        table = Table(title="[bold cyan]Agent-Lab Unified Cross-Agent Benchmark Leaderboard (v0.6.0)[/bold cyan]")
+        table.add_column("Rank", justify="center", style="bold")
+        table.add_column("Tier", justify="center")
+        table.add_column("Agent / Model", style="cyan")
+        table.add_column("Composite", justify="right", style="bold magenta")
+        table.add_column("Pass@1 (95% CI)", justify="center")
+        table.add_column("Tool F1", justify="right")
+        table.add_column("Latency (p95)", justify="right")
+        table.add_column("Cost / 1k Tasks", justify="right", style="green")
+        table.add_column("Pareto", justify="center")
+
+        tier_colors = {"S": "bold green", "A": "bold cyan", "B": "bold blue", "C": "bold yellow", "D": "bold red"}
+        for e in entries:
+            tier_str = f"[{tier_colors.get(e.tier, 'white')}]{e.tier}[/{tier_colors.get(e.tier, 'white')}]"
+            pareto_str = "[bold green]★ YES[/bold green]" if e.is_pareto_optimal else "[dim]—[/dim]"
+            ci_str = f"{e.pass_at_1*100:.1f}% [{e.pass_at_1_ci[0]*100:.0f}–{e.pass_at_1_ci[1]*100:.0f}%]"
+            table.add_row(
+                f"#{e.rank}",
+                tier_str,
+                f"{e.agent_id}\n[dim]{e.model_id}[/dim]",
+                f"{e.composite_score:.1f}",
+                ci_str,
+                f"{e.tool_f1:.4f}",
+                f"{e.mean_latency_ms:.0f}ms ({e.p95_latency_ms:.0f})",
+                f"${e.cost_per_1k_tasks_usd:.4f}",
+                pareto_str,
+            )
+        console.print(table)
+        rendered = None
+
+    if output_file and rendered:
+        Path(output_file).write_text(rendered, encoding="utf-8")
+        console.print(f"[bold green]Saved leaderboard to:[/bold green] {output_file}")
+    elif rendered:
+        print(rendered)
+
+
+@leaderboard.command("render-html")
+@click.option("--eval-file", "-f", default=None, help="Path to JSON file containing list of evaluation records.")
+@click.option("--output-file", "-o", default="leaderboard.html", help="Path for HTML dashboard output.")
+@click.option("--title", default="Agent-Lab Unified Cross-Agent Benchmark Leaderboard", help="Report header title.")
+@click.option("--simulate-economics/--no-simulate-economics", default=True, help="Include swarm token economics analysis.")
+def leaderboard_render_html(eval_file: Optional[str], output_file: str, title: str, simulate_economics: bool) -> None:
+    """Export self-contained dark-theme HTML report with responsive SVG charts."""
+    if eval_file:
+        p = Path(eval_file)
+        if not p.is_file():
+            console.print(f"[bold red]File not found:[/bold red] {eval_file}")
+            sys.exit(1)
+        try:
+            raw = json.loads(p.read_text(encoding="utf-8"))
+            records = [AgentEvaluationRecord.from_dict(item) for item in raw]
+        except Exception as e:
+            console.print(f"[bold red]Failed to parse evaluation file:[/bold red] {e}")
+            sys.exit(1)
+    else:
+        records = _get_default_sample_evaluations()
+
+    entries = LeaderboardEngine.generate_leaderboard(records)
+
+    econ_report = None
+    if simulate_economics:
+        # Default distribution across top frontier, mid-tier, and fast router
+        econ_report = TokenEconomicsSimulator.simulate_workload(
+            model_allocations={
+                "claude-3-5-sonnet": 30,
+                "gpt-4o": 20,
+                "deepseek-coder-v2": 25,
+                "gemini-1.5-flash": 25,
+            },
+            tasks_per_day=10000,
+            days=30,
+        )
+
+    html_content = LeaderboardDashboard.export_html_report(
+        entries=entries,
+        economics=econ_report,
+        title=title,
+    )
+
+    out_path = Path(output_file).resolve()
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(html_content, encoding="utf-8")
+    console.print(Panel(
+        f"[bold green]HTML Dashboard Exported Successfully![/bold green]\n\n"
+        f"Path: {out_path}\n"
+        f"Models Evaluated: {len(entries)}\n"
+        f"Pareto Optimal Models: {len([e for e in entries if e.is_pareto_optimal])}\n"
+        f"Includes SVG Charts: Composite Bar Chart & Pareto Frontier Scatter Plot",
+        title="[bold cyan]Leaderboard Export[/bold cyan]",
+        border_style="green",
+    ))
+
+
+@leaderboard.command("simulate-cost")
+@click.option("--tasks-per-day", "-t", default=10000, type=int, help="Number of agent tasks processed daily.")
+@click.option("--days", "-d", default=30, type=int, help="Billing horizon in days.")
+@click.option("--avg-prompt-tokens", default=1500, type=int, help="Average prompt tokens per task.")
+@click.option("--avg-completion-tokens", default=500, type=int, help="Average completion tokens per task.")
+def leaderboard_simulate_cost(tasks_per_day: int, days: int, avg_prompt_tokens: int, avg_completion_tokens: int) -> None:
+    """Simulate swarm token economics, multi-model cost distribution and routing downgrade savings."""
+    allocations = {
+        "claude-3-5-sonnet": 30,
+        "gpt-4o": 20,
+        "deepseek-coder-v2": 25,
+        "gemini-1.5-flash": 25,
+    }
+    report = TokenEconomicsSimulator.simulate_workload(
+        model_allocations=allocations,
+        tasks_per_day=tasks_per_day,
+        days=days,
+        avg_prompt_tokens=avg_prompt_tokens,
+        avg_completion_tokens=avg_completion_tokens,
+    )
+
+    table = Table(title="[bold green]Multi-Model Swarm Token Economics Projection[/bold green]")
+    table.add_column("Model ID", style="cyan")
+    table.add_column("Provider", style="dim")
+    table.add_column("Traffic Share", justify="right")
+    table.add_column("Daily Tasks", justify="right")
+    table.add_column("Cost / Task", justify="right")
+    table.add_column("Daily Cost", justify="right")
+    table.add_column("Monthly Cost", justify="right", style="bold green")
+
+    for model_id, data in report.model_breakdown.items():
+        table.add_row(
+            model_id,
+            data["provider"],
+            f"{data['share_pct']}%",
+            f"{data['tasks_per_day']:,}",
+            f"${data['cost_per_task_usd']:.5f}",
+            f"${data['daily_cost_usd']:.2f}",
+            f"${data['monthly_cost_usd']:.2f}",
+        )
+
+    console.print(table)
+
+    savings = report.downgrade_savings_analysis
+    console.print(Panel(
+        f"[bold cyan]Swarm Economics Summary:[/bold cyan]\n"
+        f"Daily Total Tasks: {report.total_tasks_per_day:,} | Horizon: {report.simulation_days} days\n"
+        f"Total Projected Tokens: {(report.total_prompt_tokens + report.total_completion_tokens):,}\n"
+        f"Total Daily Cost: [bold green]${report.daily_cost_usd:,.2f}[/bold green]\n"
+        f"Total Monthly Cost: [bold green]${report.monthly_cost_usd:,.2f}[/bold green]\n\n"
+        f"[bold yellow]Hybrid Routing Optimization:[/bold yellow]\n"
+        f"100% Flagship Benchmark Cost: ${savings['all_flagship_monthly_cost_usd']:,.2f} / month\n"
+        f"Optimized Hybrid Swarm Cost: ${savings['hybrid_routing_monthly_cost_usd']:,.2f} / month\n"
+        f"[bold green]Monthly Cost Savings: ${savings['monthly_savings_usd']:,.2f} ({savings['savings_percentage']}%) [/bold green]",
+        title="[bold magenta]Token Economics Verdict[/bold magenta]",
+        border_style="magenta",
+    ))
+
+
+@leaderboard.command("export-json")
+@click.option("--eval-file", "-f", default=None, help="Path to evaluation JSON.")
+@click.option("--output-file", "-o", required=True, help="Path for JSON output.")
+def leaderboard_export_json(eval_file: Optional[str], output_file: str) -> None:
+    """Export structured JSON schema of ranked leaderboard entries."""
+    if eval_file:
+        p = Path(eval_file)
+        if not p.is_file():
+            console.print(f"[bold red]File not found:[/bold red] {eval_file}")
+            sys.exit(1)
+        records = [AgentEvaluationRecord.from_dict(item) for item in json.loads(p.read_text(encoding="utf-8"))]
+    else:
+        records = _get_default_sample_evaluations()
+
+    entries = LeaderboardEngine.generate_leaderboard(records)
+    out_p = Path(output_file).resolve()
+    out_p.parent.mkdir(parents=True, exist_ok=True)
+    out_p.write_text(LeaderboardDashboard.export_json(entries), encoding="utf-8")
+    console.print(f"[bold green]Exported {len(entries)} ranked leaderboard entries to:[/bold green] {output_file}")
 
 
 if __name__ == "__main__":

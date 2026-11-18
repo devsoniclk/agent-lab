@@ -5,6 +5,36 @@ All notable changes to `agent-lab` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-11-18
+
+### Added
+- **Cross-Agent Unified Benchmark Leaderboard (`agent_lab.leaderboard`)**:
+  - `LeaderboardEngine`: Computes normalized multi-attribute composite scores (0–100) weighting Pass@1 accuracy (35%), tool selection trajectory F1 (25%), latency efficiency (15%), task token cost (15%), and safety/ZK proof compliance (10%).
+  - Engineering Tier Classification: Automatically assigns competitive tiers (`S` >= 90.0, `A` >= 80.0, `B` >= 70.0, `C` >= 60.0, `D` < 60.0).
+  - Wilson Score 95% Confidence Intervals: Statistically rigorous confidence bounds for agent pass rates (`pass_at_1_ci`).
+  - Non-Dominated Pareto Frontier Analysis (`compute_pareto_frontier`): Identifies optimal model trade-offs minimizing task execution costs while maximizing composite benchmark scores.
+- **Multi-Model Inference & Token Economics Simulator (`TokenEconomicsSimulator`)**:
+  - `ModelPricing`: Built-in catalog covering frontier and open-weight models (`claude-3-5-sonnet`, `claude-3-5-haiku`, `gpt-4o`, `gpt-4o-mini`, `deepseek-coder-v2`, `qwen-2.5-coder-32b`, `llama-3.3-70b`, `gemini-1.5-pro`, `gemini-1.5-flash`).
+  - Swarm Workload Simulator: Projects token consumption, daily/monthly operational expenses, and per-model traffic distribution across multi-agent swarms.
+  - Hybrid Routing Downgrade Analysis: Quantifies quantitative monthly dollar and percentage savings achievable by intelligently routing simple tasks to low-cost or local models instead of 100% flagship models.
+- **Interactive Dark-Theme HTML & SVG Dashboard (`LeaderboardDashboard`)**:
+  - Standalone, responsive HTML5 dashboard with CSS glassmorphism and executive KPI summary cards.
+  - Embedded SVG Horizontal Bar Chart: Visualizes composite scores across evaluated models with tier-based color gradients.
+  - Embedded SVG Pareto Frontier Scatter Plot: Visualizes cost-versus-quality trade-offs with 2D coordinate gridlines and connected Pareto optimal frontier curves.
+  - Markdown and JSON export capabilities for automated CI/CD and release publishing.
+- **Telemetry Token & Latency Integration (`agent_lab.telemetry`)**:
+  - Added `record_inference` to track prompt/completion tokens, latency in ms, and cumulative USD costs across models.
+  - Added inference tracking to terminal dashboard and Markdown reports.
+- **Leaderboard CLI Command Group (`agent-lab leaderboard`)**:
+  - `agent-lab leaderboard generate`: Generates formatted rich terminal tables, JSON, or Markdown from benchmark results.
+  - `agent-lab leaderboard render-html`: Exports standalone HTML dashboard with embedded SVG charts.
+  - `agent-lab leaderboard simulate-cost`: Simulates multi-model swarm token consumption and cost optimization.
+  - `agent-lab leaderboard export-json`: Exports structured JSON schema of ranked leaderboard entries.
+- **FastMCP Leaderboard Tools**:
+  - Added 4 new tools: `agentlab_leaderboard_generate`, `agentlab_leaderboard_pareto_analysis`, `agentlab_leaderboard_cost_simulator`, `agentlab_leaderboard_export_html` (expanding the FastMCP tool suite to 29 tools).
+- **Expanded Test Suite**:
+  - Added 30 new unit and integration tests across `tests/test_leaderboard.py`, `tests/test_cli_v6.py`, `tests/test_mcp_v6.py`, and `tests/test_v6_coverage_edges.py` (143 total tests, 100% pass rate, 93% code coverage).
+
 ## [0.5.0] - 2026-11-18
 
 ### Added

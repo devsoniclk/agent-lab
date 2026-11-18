@@ -95,6 +95,14 @@ flowchart TD
 - **Equivocation Slashing:** Real-time detection of conflicting votes by rogue or compromised agents, automatically isolating Byzantine validators.
 - **Solana Anchor On-Chain Agent Registry & Economic Slashing:** Decentralized identity and stake-weighted governance (`AnchorAgentRegistryClient`). Features deterministic Program Derived Address (PDA) derivation (`["agent", pubkey]`), minimum stake thresholds, deposit/withdrawal accounting, and cryptographic equivocation slashing (50% burned, 50% reporter bounty, reputation score deduction).
 - **Zero-Knowledge Trajectory Execution & Deliberation Verifier (`agent_lab.zk`):** Synthesizes and cryptographically audits succinct zero-knowledge execution receipts for agent deliberation trajectories across RISC Zero (`risc0`) guest ELF and Succinct SP1 (`sp1`) zkVM architectures. Binds session ID, tool counts, action Merkle tree roots, AST code safety flags, and policy constraint adherence into verifiable cryptographic receipts. Supports ZK-guarded swarm consensus rounds.
+- **Cross-Agent Unified Benchmark Leaderboard & Pareto Frontier Analysis (`agent_lab.leaderboard`):**
+  - Multi-attribute composite scoring (0–100) weighting Pass@1 accuracy (35%), tool selection trajectory F1 (25%), latency efficiency (15%), task token cost (15%), and safety/ZK compliance (10%).
+  - Engineering tier classification (`S`, `A`, `B`, `C`, `D`) and Wilson 95% confidence intervals on benchmark pass rates.
+  - Non-dominated Pareto frontier calculation identifying cost-optimal models that maximize benchmark quality.
+  - Interactive dark-theme HTML report with embedded responsive SVG bar charts (Composite Scores) and 2D scatter plots (Cost vs Quality Pareto Frontier).
+- **Multi-Model Token Economics & Swarm Workload Simulator (`TokenEconomicsSimulator`):**
+  - Integrated model catalog for frontier and open-weight models (`claude-3-5-sonnet`, `gpt-4o`, `deepseek-coder-v2`, `qwen-2.5-coder-32b`, `llama-3.3-70b`, `gemini-1.5-flash`).
+  - Swarm workload simulator projecting token throughput, daily/monthly dollar expenses, and quantitative hybrid routing downgrade savings.
 - **Cryptographic Merkle Action Receipts:** Computes RFC 6962-compliant Merkle trees over deliberation steps (Observation -> Thought -> Tool Call -> Action), producing tamper-evident `.witness` files.
 - **Pre-Flight Web3 Simulation:** Simulates Solana transactions pre-flight, profiling Compute Units (CU) and decoding custom Anchor errors.
 - **Autonomous Evaluation Harness & Trajectory Scoring:**
@@ -116,7 +124,7 @@ flowchart TD
   - Cryptographic equivocation slashing engine executing 50% collateral burns and 50% reporter rewards, reputation penalties (-2500 bps), and moving offenders to `JAILED` status.
   - Complete Anchor Program IDL (`ANCHOR_AGENT_REGISTRY_IDL`) with instructions, accounts, and error codes.
   - CLI commands (`agent-lab registry register`, `stake`, `info`, `list`, `slash-proof`, `export-idl`).
-- **FastMCP Protocol Integration:** Exposes 21 native tools for Claude Code, OpenBot, Cursor, and custom agent harnesses.
+- **FastMCP Protocol Integration:** Exposes 29 native tools for Claude Code, OpenBot, Cursor, and custom agent harnesses.
 
 ---
 
@@ -329,7 +337,8 @@ print(f"Verified: {report.is_valid}, Action Merkle Root: {report.action_merkle_r
 - [x] **v0.2.0:** Multi-agent trajectory tool-use scoring (Precision/Recall/F1), loop & repetition detection, Wilson confidence intervals, benchmark suite execution (`humaneval_mini.json`), and cross-agent terminal telemetry dashboard.
 - [x] **v0.3.0:** Distributed WebSocket consensus transport for multi-host worker swarms with HMAC-SHA256 authentication and state synchronization.
 - [x] **v0.4.0:** Solana Anchor on-chain agent registry, economic staking, and cryptographic equivocation slashing engine.
-- [ ] **v0.5.0:** Autonomous Zero-Knowledge execution and slashing attestation proofs via RISC Zero zkVM guest verification.
+- [x] **v0.5.0:** Autonomous Zero-Knowledge execution and deliberation verification via zkVM receipts (RISC Zero & SP1) and ZK-guarded swarm consensus.
+- [x] **v0.6.0:** Cross-agent unified benchmark leaderboard, multi-model token economics, Pareto frontier analysis, and interactive dark-theme SVG dashboard.
 - [ ] **v1.0.0:** General Availability enterprise release with PyPI binary distributions.
 
 ---

@@ -46,8 +46,18 @@ from agent_lab.zk import (
     DEFAULT_RISC0_IMAGE_ID,
     DEFAULT_SP1_VKEY,
 )
+from agent_lab.leaderboard import (
+    ModelPricing,
+    AgentEvaluationRecord,
+    LeaderboardEntry,
+    LeaderboardEngine,
+    SwarmEconomicsReport,
+    TokenEconomicsSimulator,
+    LeaderboardDashboard,
+    DEFAULT_MODEL_PRICING_CATALOG,
+)
 
-__version__ = "0.5.0"
+__version__ = "0.6.0"
 __all__ = [
     "AgentLabConfig",
     "AgentLabOrchestrator",
@@ -90,4 +100,12 @@ __all__ = [
     "ZKTrajectoryEngine",
     "DEFAULT_RISC0_IMAGE_ID",
     "DEFAULT_SP1_VKEY",
+    "ModelPricing",
+    "AgentEvaluationRecord",
+    "LeaderboardEntry",
+    "LeaderboardEngine",
+    "SwarmEconomicsReport",
+    "TokenEconomicsSimulator",
+    "LeaderboardDashboard",
+    "DEFAULT_MODEL_PRICING_CATALOG",
 ]

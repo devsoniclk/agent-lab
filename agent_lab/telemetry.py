@@ -42,6 +42,11 @@ class TelemetryMetrics:
     trajectories_evaluated: int = 0
     trajectory_f1_sum: float = 0.0
     loops_detected: int = 0
+    total_prompt_tokens: int = 0
+    total_completion_tokens: int = 0
+    total_inference_cost_usd: float = 0.0
+    total_inference_calls: int = 0
+    inference_latency_sum_ms: float = 0.0
 
 
 class TelemetryCollector:
@@ -105,6 +110,39 @@ class TelemetryCollector:
             self.metrics.loops_detected += 1
         self._add_event("trajectory", "eval", {"f1_score": f1_score, "has_loop": has_loop})
 
+    def record_inference(
+        self,
+        model: str,
+        prompt_tokens: int,
+        completion_tokens: int,
+        latency_ms: float,
+        cost_usd: Optional[float] = None,
+    ) -> None:
+        """Record an LLM model inference call with token economics and latency."""
+        self.metrics.total_inference_calls += 1
+        self.metrics.total_prompt_tokens += prompt_tokens
+        self.metrics.total_completion_tokens += completion_tokens
+        self.metrics.inference_latency_sum_ms += latency_ms
+        if cost_usd is not None:
+            self.metrics.total_inference_cost_usd += cost_usd
+        self._add_event(
+            "inference",
+            "call",
+            {
+                "model": model,
+                "prompt_tokens": prompt_tokens,
+                "completion_tokens": completion_tokens,
+                "latency_ms": latency_ms,
+                "cost_usd": cost_usd,
+            },
+        )
+
+    def avg_inference_latency_ms(self) -> float:
+        """Calculate mean inference latency in milliseconds."""
+        if self.metrics.total_inference_calls == 0:
+            return 0.0
+        return round(self.metrics.inference_latency_sum_ms / self.metrics.total_inference_calls, 1)
+
     def average_tool_f1(self) -> float:
         """Calculate mean tool-selection F1 score across all evaluated trajectories."""
         if self.metrics.trajectories_evaluated == 0:
@@ -126,6 +164,7 @@ class TelemetryCollector:
         data = asdict(self.metrics)
         data["average_tool_f1"] = self.average_tool_f1()
         data["eval_pass_rate"] = self.eval_pass_rate()
+        data["avg_inference_latency_ms"] = self.avg_inference_latency_ms()
         data["recent_events_count"] = len(self.events)
         return data
 
@@ -164,6 +203,11 @@ class TelemetryCollector:
             trajectories_evaluated=m.get("trajectories_evaluated", 0),
             trajectory_f1_sum=m.get("trajectory_f1_sum", 0.0),
             loops_detected=m.get("loops_detected", 0),
+            total_prompt_tokens=m.get("total_prompt_tokens", 0),
+            total_completion_tokens=m.get("total_completion_tokens", 0),
+            total_inference_cost_usd=m.get("total_inference_cost_usd", 0.0),
+            total_inference_calls=m.get("total_inference_calls", 0),
+            inference_latency_sum_ms=m.get("inference_latency_sum_ms", 0.0),
         )
         for ev in data.get("events", []):
             collector.events.append(
@@ -188,6 +232,7 @@ class TelemetryCollector:
 - **Solana Simulations:** {m['solana_simulations']}
 - **Benchmark Evaluations:** {m['eval_tasks_run']} (Passed: {m['eval_tasks_passed']}, Pass Rate: {m['eval_pass_rate'] * 100:.1f}%)
 - **Trajectory Evaluations:** {m['trajectories_evaluated']} (Mean Tool F1: {m['average_tool_f1']:.4f}, Loops Caught: {m['loops_detected']})
+- **Model Inference Calls:** {m['total_inference_calls']} (Tokens: {m['total_prompt_tokens'] + m['total_completion_tokens']:,}, Cost: ${m['total_inference_cost_usd']:.4f}, Avg Latency: {m['avg_inference_latency_ms']:.1f}ms)
 """
 
     def render_dashboard(self, console: Optional[Console] = None) -> None:
@@ -221,6 +266,12 @@ class TelemetryCollector:
         eval_table.add_row("Mean Tool-Selection F1", f1_str, ">= 0.85 Precision/Recall")
         eval_table.add_row("Trajectories Audited", str(m["trajectories_evaluated"]), "Multi-step Agent Loops")
         eval_table.add_row("Infinite Loops Intercepted", str(m["loops_detected"]), "Zero-Loop Tolerance")
+        if m["total_inference_calls"] > 0:
+            eval_table.add_row(
+                "Model Inference Calls",
+                f"{m['total_inference_calls']} calls (${m['total_inference_cost_usd']:.4f})",
+                f"Avg Latency: {m['avg_inference_latency_ms']:.1f}ms",
+            )
 
         con.print(Panel(ops_table, title="[bold cyan]Agent-Lab Operational Dashboard[/bold cyan]"))
         con.print(Panel(eval_table, title="[bold magenta]Autonomous OSS Quality Gates[/bold magenta]"))

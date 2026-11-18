@@ -171,3 +171,31 @@ Inspect the full committed journal payload, action Merkle tree root, seal, and m
 ```bash
 agent-lab zk inspect -f <receipt.json>
 ```
+
+### `agent-lab leaderboard generate`
+Generate ranked cross-agent benchmark leaderboard with multi-attribute composite scores (0–100), Wilson 95% confidence intervals, and Pareto optimal tagging.
+
+```bash
+agent-lab leaderboard generate [--eval-file <path>] [--sample] [--output-format table|json|markdown] [--output-file <path>]
+```
+
+### `agent-lab leaderboard render-html`
+Export a standalone, responsive dark-theme HTML report with embedded SVG horizontal bar charts (Composite Rankings) and 2D scatter plots (Cost vs Quality Pareto Frontier).
+
+```bash
+agent-lab leaderboard render-html [--eval-file <path>] [--output-file <path>] [--title "<text>"] [--simulate-economics/--no-simulate-economics]
+```
+
+### `agent-lab leaderboard simulate-cost`
+Simulate multi-agent swarm token economics, per-model traffic distribution, and quantitative hybrid routing downgrade savings over a multi-day horizon.
+
+```bash
+agent-lab leaderboard simulate-cost [--tasks-per-day <int>] [--days <int>] [--avg-prompt-tokens <int>] [--avg-completion-tokens <int>]
+```
+
+### `agent-lab leaderboard export-json`
+Export structured JSON schema of ranked leaderboard entries for CI/CD pipelines and external dashboards.
+
+```bash
+agent-lab leaderboard export-json [--eval-file <path>] -o <output.json>
+```

@@ -5,6 +5,7 @@ agent_lab.mcp_server: FastMCP server exposing Agent-Lab tools for Claude, OpenBo
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from agent_lab.config import AgentLabConfig
@@ -37,6 +38,15 @@ from agent_lab.zk import (
     ZKPolicyConstraints,
     DEFAULT_RISC0_IMAGE_ID,
     DEFAULT_SP1_VKEY,
+)
+from agent_lab.leaderboard import (
+    ModelPricing,
+    AgentEvaluationRecord,
+    LeaderboardEntry,
+    LeaderboardEngine,
+    TokenEconomicsSimulator,
+    LeaderboardDashboard,
+    DEFAULT_MODEL_PRICING_CATALOG,
 )
 
 # Default global orchestrator and collector
@@ -476,4 +486,169 @@ def agentlab_zk_policy_digest(
         })
     except Exception as e:
         return json.dumps({"status": "error", "error": str(e)})
+
+
+def _get_mcp_sample_records() -> List[AgentEvaluationRecord]:
+    return [
+        AgentEvaluationRecord(
+            agent_id="code-synthesizer-alpha",
+            model_id="claude-3-5-sonnet",
+            benchmark_suite="swe-bench-mini",
+            total_tasks=100,
+            passed_tasks=92,
+            pass_at_1=0.92,
+            tool_f1_score=0.94,
+            mean_latency_ms=1180.0,
+            p95_latency_ms=1850.0,
+            avg_prompt_tokens=1800,
+            avg_completion_tokens=650,
+        ),
+        AgentEvaluationRecord(
+            agent_id="code-synthesizer-beta",
+            model_id="gpt-4o",
+            benchmark_suite="swe-bench-mini",
+            total_tasks=100,
+            passed_tasks=89,
+            pass_at_1=0.89,
+            tool_f1_score=0.91,
+            mean_latency_ms=1050.0,
+            p95_latency_ms=1720.0,
+            avg_prompt_tokens=1750,
+            avg_completion_tokens=600,
+        ),
+        AgentEvaluationRecord(
+            agent_id="deepseek-coder",
+            model_id="deepseek-coder-v2",
+            benchmark_suite="swe-bench-mini",
+            total_tasks=100,
+            passed_tasks=86,
+            pass_at_1=0.86,
+            tool_f1_score=0.88,
+            mean_latency_ms=820.0,
+            p95_latency_ms=1340.0,
+            avg_prompt_tokens=1700,
+            avg_completion_tokens=580,
+        ),
+        AgentEvaluationRecord(
+            agent_id="flash-router",
+            model_id="gemini-1.5-flash",
+            benchmark_suite="swe-bench-mini",
+            total_tasks=100,
+            passed_tasks=76,
+            pass_at_1=0.76,
+            tool_f1_score=0.82,
+            mean_latency_ms=410.0,
+            p95_latency_ms=690.0,
+            avg_prompt_tokens=1500,
+            avg_completion_tokens=480,
+        ),
+    ]
+
+
+def agentlab_leaderboard_generate(eval_records_json: str = "") -> str:
+    """Generate a ranked cross-agent benchmark leaderboard with composite scores and tiers."""
+    try:
+        if eval_records_json.strip():
+            raw = json.loads(eval_records_json)
+            records = [AgentEvaluationRecord.from_dict(item) for item in raw]
+        else:
+            records = _get_mcp_sample_records()
+
+        entries = LeaderboardEngine.generate_leaderboard(records)
+        return json.dumps({
+            "status": "success",
+            "count": len(entries),
+            "leaderboard": [e.to_dict() for e in entries],
+        })
+    except Exception as e:
+        return json.dumps({"status": "error", "error": str(e)})
+
+
+def agentlab_leaderboard_pareto_analysis(eval_records_json: str = "") -> str:
+    """Perform Pareto frontier analysis on cross-agent benchmark results, identifying non-dominated models."""
+    try:
+        if eval_records_json.strip():
+            raw = json.loads(eval_records_json)
+            records = [AgentEvaluationRecord.from_dict(item) for item in raw]
+        else:
+            records = _get_mcp_sample_records()
+
+        entries = LeaderboardEngine.generate_leaderboard(records)
+        pareto_optimal = [e.to_dict() for e in entries if e.is_pareto_optimal]
+        dominated = [e.to_dict() for e in entries if not e.is_pareto_optimal]
+
+        return json.dumps({
+            "status": "success",
+            "total_models": len(entries),
+            "pareto_optimal_count": len(pareto_optimal),
+            "pareto_optimal_entries": pareto_optimal,
+            "dominated_entries": dominated,
+        })
+    except Exception as e:
+        return json.dumps({"status": "error", "error": str(e)})
+
+
+def agentlab_leaderboard_cost_simulator(
+    model_allocations_json: str = "",
+    tasks_per_day: int = 10000,
+    days: int = 30,
+) -> str:
+    """Simulate swarm token economics, multi-model cost distribution, and routing downgrade savings."""
+    try:
+        allocations = json.loads(model_allocations_json) if model_allocations_json.strip() else {
+            "claude-3-5-sonnet": 30,
+            "gpt-4o": 20,
+            "deepseek-coder-v2": 25,
+            "gemini-1.5-flash": 25,
+        }
+        report = TokenEconomicsSimulator.simulate_workload(
+            model_allocations=allocations,
+            tasks_per_day=tasks_per_day,
+            days=days,
+        )
+        return json.dumps({
+            "status": "success",
+            "report": report.to_dict(),
+        })
+    except Exception as e:
+        return json.dumps({"status": "error", "error": str(e)})
+
+
+def agentlab_leaderboard_export_html(
+    eval_records_json: str = "",
+    output_path: str = "leaderboard.html",
+    title: str = "Agent-Lab Cross-Agent Leaderboard",
+) -> str:
+    """Render and export a standalone, dark-theme HTML report with SVG bar and scatter charts."""
+    try:
+        if eval_records_json.strip():
+            raw = json.loads(eval_records_json)
+            records = [AgentEvaluationRecord.from_dict(item) for item in raw]
+        else:
+            records = _get_mcp_sample_records()
+
+        entries = LeaderboardEngine.generate_leaderboard(records)
+        econ_report = TokenEconomicsSimulator.simulate_workload(
+            model_allocations={"claude-3-5-sonnet": 35, "deepseek-coder-v2": 35, "gemini-1.5-flash": 30},
+            tasks_per_day=10000,
+            days=30,
+        )
+        html_out = LeaderboardDashboard.export_html_report(
+            entries=entries,
+            economics=econ_report,
+            title=title,
+        )
+        p = Path(output_path).resolve()
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(html_out, encoding="utf-8")
+
+        return json.dumps({
+            "status": "success",
+            "output_path": str(p),
+            "bytes_written": len(html_out),
+            "models_ranked": len(entries),
+        })
+    except Exception as e:
+        return json.dumps({"status": "error", "error": str(e)})
+
 
