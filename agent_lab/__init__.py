@@ -76,8 +76,21 @@ from agent_lab.router import (
     QuotaExceededError,
     CascadeExhaustedError,
 )
+from agent_lab.memory import (
+    MemoryKind,
+    MemoryAccessLevel,
+    MemoryEntry,
+    MemorySearchResult,
+    SemanticTextEmbedder,
+    CrossAgentMemoryStore,
+    dot_product,
+    l2_norm,
+    normalize_vector,
+    cosine_similarity,
+    euclidean_distance,
+)
 
-__version__ = "0.7.0"
+__version__ = "0.8.0"
 __all__ = [
     "AgentLabConfig",
     "AgentLabOrchestrator",
@@ -146,4 +159,15 @@ __all__ = [
     "CircuitBreakerOpenError",
     "QuotaExceededError",
     "CascadeExhaustedError",
+    "MemoryKind",
+    "MemoryAccessLevel",
+    "MemoryEntry",
+    "MemorySearchResult",
+    "SemanticTextEmbedder",
+    "CrossAgentMemoryStore",
+    "dot_product",
+    "l2_norm",
+    "normalize_vector",
+    "cosine_similarity",
+    "euclidean_distance",
 ]

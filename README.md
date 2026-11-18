@@ -130,7 +130,13 @@ flowchart TD
   - 3-State circuit breakers (`ModelCircuitBreaker`) with automated cooldown recovery, canary probes, and latency SLA violation detection.
   - Cross-model cascade fallback routing (`AdaptiveModelRouter`) with cryptographic receipts and zero-drop failover.
   - Interactive CLI commands (`agent-lab router status`, `route`, `reset-circuit`, `benchmark-resilience`).
-- **FastMCP Protocol Integration:** Exposes 33 native tools for Claude Code, OpenBot, Cursor, and custom agent harnesses.
+- **Cross-Agent Semantic Memory Store & Episodic Vector Index (v0.8.0):**
+  - Pure-Python deterministic text embedder using tokenization and multi-ngram feature hashing into unit hyperspheres with zero external dependencies (`SemanticTextEmbedder`).
+  - Thread-safe, multi-namespace cross-agent semantic memory store (`CrossAgentMemoryStore`) with granular access boundaries (`PRIVATE`, `SWARM`, `PUBLIC`).
+  - Hybrid lexical/dense vector retrieval harmonizing cosine similarity, token overlap, continuous exponential temporal recency decay, and importance weighting.
+  - Memory eviction policies (`DECAY`, `LRU`, `LIF`) and full JSON export/import serialization.
+  - Interactive CLI commands (`agent-lab memory store`, `search`, `stats`, `evict`, `export`, `import`).
+- **FastMCP Protocol Integration:** Exposes 37 native tools for Claude Code, OpenBot, Cursor, and custom agent harnesses.
 
 ---
 
@@ -346,6 +352,7 @@ print(f"Verified: {report.is_valid}, Action Merkle Root: {report.action_merkle_r
 - [x] **v0.5.0:** Autonomous Zero-Knowledge execution and deliberation verification via zkVM receipts (RISC Zero & SP1) and ZK-guarded swarm consensus.
 - [x] **v0.6.0:** Cross-agent unified benchmark leaderboard, multi-model token economics, Pareto frontier analysis, and interactive dark-theme SVG dashboard.
 - [x] **v0.7.0:** Adaptive dynamic token rate-limiter, circuit breakers, and cross-model fallback cascade router.
+- [x] **v0.8.0:** Cross-agent semantic memory store, pure-Python episodic vector index, hybrid lexical/dense retrieval, and memory decay eviction.
 - [ ] **v1.0.0:** General Availability enterprise release with PyPI binary distributions.
 
 ---

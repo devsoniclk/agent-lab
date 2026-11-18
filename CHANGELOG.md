@@ -5,6 +5,33 @@ All notable changes to `agent-lab` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-11-18
+
+### Added
+- **Cross-Agent Semantic Memory Store (`agent_lab.memory.CrossAgentMemoryStore`)**:
+  - Thread-safe, multi-namespace cross-agent semantic memory store with vector indexing and memory partitioning.
+  - Granular access control boundaries (`PRIVATE`, `SWARM`, `PUBLIC`) preventing inter-agent data leaks while enabling coordinated swarm context sharing.
+  - Proactive and reactive memory eviction strategies (`DECAY`, `LRU`, `LIF`) to maintain strict partition capacity bounds.
+  - Serialization engine supporting JSON backups (`export_json`) and incremental restores (`import_json`).
+- **Pure-Python Deterministic Vector Math & Semantic Embedder (`SemanticTextEmbedder`)**:
+  - Zero-dependency algebraic vector operations: `cosine_similarity`, `dot_product`, `euclidean_distance`, `normalize_vector`, `l2_norm`.
+  - Multi-ngram feature hashing trick with sublinear term-frequency scaling ($1 + \ln(\text{tf})$) projecting arbitrary text into a fixed-dimensional unit hypersphere.
+  - Cross-platform deterministic hashing via `hashlib.sha256`.
+- **Hybrid Lexical & Dense Vector Retrieval (`CrossAgentMemoryStore.search`)**:
+  - Harmonizes dense vector cosine similarity with token-overlap lexical scoring via tunable `hybrid_alpha`.
+  - Continuous exponential temporal recency decay modeling ($e^{-\lambda \Delta t}$) based on configurable half-lives.
+  - Composite multi-attribute ranking integrating similarity, lexical keywords, temporal recency, and innate importance.
+- **Memory CLI Command Group (`agent-lab memory`)**:
+  - `agent-lab memory store`: Stores episodic, semantic, or procedural memory items with tag indexing and importance weighting.
+  - `agent-lab memory search`: Natural language hybrid vector/keyword query search with rich terminal table output and JSON export.
+  - `agent-lab memory stats`: Summarizes total memory volume, namespace partitions, taxonomy counts, and embedding dimensions.
+  - `agent-lab memory evict`: Prunes low-value or expired memories under `DECAY`, `LRU`, or `LIF` policies.
+  - `agent-lab memory export` & `import`: Manages file-based JSON backups and restoration.
+- **FastMCP Protocol Extensions**:
+  - Added 4 new native tools: `agentlab_memory_store`, `agentlab_memory_search`, `agentlab_memory_get_stats`, `agentlab_memory_clear_or_evict` (expanding the FastMCP suite to 37 tools).
+- **Expanded Test Suite**:
+  - Added 17 new unit and integration tests across `tests/test_memory.py`, `tests/test_cli_v8.py`, `tests/test_mcp_v8.py`, and `tests/test_v8_coverage_edges.py` (189 total tests, 100% pass rate, 93% code coverage).
+
 ## [0.7.0] - 2026-11-18
 
 ### Added

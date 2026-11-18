@@ -68,6 +68,14 @@ from agent_lab.router import (
     CascadeExhaustedError,
     QuotaExceededError,
 )
+from agent_lab.memory import (
+    MemoryKind,
+    MemoryAccessLevel,
+    MemoryEntry,
+    MemorySearchResult,
+    CrossAgentMemoryStore,
+    SemanticTextEmbedder,
+)
 
 console = Console()
 
@@ -1362,6 +1370,195 @@ def router_benchmark_resilience(requests: int, fault_rate: float, route: str) ->
     res_table.add_row("Cumulative Task Cost", f"${total_cost:.5f}", "Economically Optimized")
 
     console.print(res_table)
+
+
+# ---------------------------------------------------------------------------
+# Cross-Agent Memory CLI Commands
+# ---------------------------------------------------------------------------
+
+_CLI_MEMORY_STORE_INSTANCE: Optional[CrossAgentMemoryStore] = None
+
+
+def _get_cli_memory_store() -> CrossAgentMemoryStore:
+    global _CLI_MEMORY_STORE_INSTANCE
+    if _CLI_MEMORY_STORE_INSTANCE is None:
+        _CLI_MEMORY_STORE_INSTANCE = CrossAgentMemoryStore()
+    return _CLI_MEMORY_STORE_INSTANCE
+
+
+@main.group()
+def memory() -> None:
+    """Cross-agent semantic memory store, episodic vector index, and hybrid retrieval."""
+    pass
+
+
+@memory.command("store")
+@click.option("--content", "-c", required=True, help="Memory text content.")
+@click.option("--agent-id", "-a", default="agent-cli", help="Authoring agent identifier.")
+@click.option("--namespace", "-n", default="default", help="Memory partition namespace.")
+@click.option("--kind", "-k", type=click.Choice(["EPISODIC", "SEMANTIC", "PROCEDURAL", "WORKING"]), default="SEMANTIC", help="Memory classification.")
+@click.option("--access-level", type=click.Choice(["PRIVATE", "SWARM", "PUBLIC"]), default="SWARM", help="Visibility permission boundary.")
+@click.option("--tag", "-t", multiple=True, help="Optional categorization tags.")
+@click.option("--importance", "-i", default=0.5, type=float, help="Subjective importance weight [0.0, 1.0].")
+@click.option("--ttl", default=None, type=float, help="Time-to-live expiration in seconds.")
+def memory_store(
+    content: str,
+    agent_id: str,
+    namespace: str,
+    kind: str,
+    access_level: str,
+    tag: tuple[str, ...],
+    importance: float,
+    ttl: Optional[float],
+) -> None:
+    """Store an episodic or semantic memory item with vector indexing."""
+    store = _get_cli_memory_store()
+    try:
+        entry = store.store(
+            content=content,
+            agent_id=agent_id,
+            kind=MemoryKind(kind),
+            access_level=MemoryAccessLevel(access_level),
+            tags=list(tag),
+            importance=importance,
+            ttl_seconds=ttl,
+            namespace=namespace,
+        )
+        console.print(f"[bold green]Stored memory:[/bold green] [cyan]{entry.id}[/cyan] in namespace '[yellow]{entry.namespace}[/yellow]' (Kind: {entry.kind.value}, Importance: {entry.importance:.2f})")
+    except Exception as e:
+        console.print(f"[bold red]Failed to store memory:[/bold red] {e}")
+        sys.exit(1)
+
+
+@memory.command("search")
+@click.option("--query", "-q", required=True, help="Natural language search query.")
+@click.option("--agent-id", "-a", default=None, help="Requesting agent ID for permission enforcement.")
+@click.option("--namespace", "-n", default=None, help="Filter by namespace.")
+@click.option("--kind", "-k", type=click.Choice(["EPISODIC", "SEMANTIC", "PROCEDURAL", "WORKING"]), default=None, help="Filter by memory kind.")
+@click.option("--top-k", "-k-top", default=5, type=int, help="Maximum results to return.")
+@click.option("--hybrid-alpha", default=0.70, type=float, help="Vector weight vs lexical keyword weight [0.0 to 1.0].")
+@click.option("--min-score", default=0.0, type=float, help="Minimum compound relevance score filter.")
+@click.option("--json-out", "-j", default=None, help="Export search results to JSON.")
+def memory_search(
+    query: str,
+    agent_id: Optional[str],
+    namespace: Optional[str],
+    kind: Optional[str],
+    top_k: int,
+    hybrid_alpha: float,
+    min_score: float,
+    json_out: Optional[str],
+) -> None:
+    """Search memories using hybrid vector similarity and keyword ranking."""
+    store = _get_cli_memory_store()
+    kind_enum = MemoryKind(kind) if kind else None
+    results = store.search(
+        query=query,
+        requesting_agent_id=agent_id,
+        namespace=namespace,
+        kind=kind_enum,
+        top_k=top_k,
+        min_score=min_score,
+        hybrid_alpha=hybrid_alpha,
+    )
+
+    if json_out:
+        payload = [r.to_dict() for r in results]
+        Path(json_out).write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        console.print(f"[bold green]Exported {len(results)} search results to:[/bold green] {json_out}")
+        return
+
+    if not results:
+        console.print("[yellow]No relevant memories found matching query.[/yellow]")
+        return
+
+    table = Table(title=f"Memory Retrieval Results (Query: '{query}')", expand=True)
+    table.add_column("Rank", style="bold cyan", width=5)
+    table.add_column("ID", style="cyan")
+    table.add_column("Agent / NS", style="yellow")
+    table.add_column("Kind", style="magenta")
+    table.add_column("Score", style="bold green", justify="right")
+    table.add_column("Sim / KW", style="blue", justify="right")
+    table.add_column("Content Preview", style="white")
+
+    for i, r in enumerate(results, start=1):
+        preview = r.entry.content[:60] + "..." if len(r.entry.content) > 60 else r.entry.content
+        table.add_row(
+            str(i),
+            r.entry.id,
+            f"{r.entry.agent_id} ({r.entry.namespace})",
+            r.entry.kind.value,
+            f"{r.score:.4f}",
+            f"{r.similarity:.2f} / {r.keyword_score:.2f}",
+            preview,
+        )
+
+    console.print(table)
+
+
+@memory.command("stats")
+@click.option("--json-out", "-j", default=None, help="Export stats to JSON.")
+def memory_stats(json_out: Optional[str]) -> None:
+    """Display memory volume, partition metrics, and embedding status."""
+    store = _get_cli_memory_store()
+    stats = store.get_stats()
+
+    if json_out:
+        Path(json_out).write_text(json.dumps(stats, indent=2), encoding="utf-8")
+        console.print(f"[bold green]Exported memory stats to:[/bold green] {json_out}")
+        return
+
+    table = Table(title="Cross-Agent Semantic Memory Store Statistics", expand=True)
+    table.add_column("Metric", style="bold cyan")
+    table.add_column("Value", style="bold green", justify="right")
+
+    table.add_row("Total Active Memories", str(stats["total_memories"]))
+    table.add_row("Unique Tags Indexed", str(stats["unique_tags"]))
+    table.add_row("Average Importance Weight", str(stats["average_importance"]))
+    table.add_row("Embedding Vector Dimension", f"{stats['embedding_dimension']}D")
+    table.add_row("Partitions (Namespaces)", json.dumps(stats["namespaces"]))
+    table.add_row("Authoring Agents", json.dumps(stats["agents"]))
+    table.add_row("Memory Taxonomies", json.dumps(stats["kinds"]))
+    table.add_row("Access Boundaries", json.dumps(stats["access_levels"]))
+
+    console.print(table)
+
+
+@memory.command("evict")
+@click.option("--namespace", "-n", default="default", help="Target namespace to evict from.")
+@click.option("--target-capacity", "-c", default=100, type=int, help="Target maximum memory capacity.")
+@click.option("--strategy", "-s", type=click.Choice(["DECAY", "LRU", "LIF"]), default="DECAY", help="Eviction prioritization strategy.")
+def memory_evict(namespace: str, target_capacity: int, strategy: str) -> None:
+    """Evict expired or low-value memories to maintain strict capacity bounds."""
+    store = _get_cli_memory_store()
+    evicted = store.evict_to_capacity(namespace=namespace, target_capacity=target_capacity, strategy=strategy)
+    console.print(f"[bold green]Evicted {evicted} items from namespace '{namespace}'[/bold green] (Strategy: {strategy}, Target: {target_capacity})")
+
+
+@memory.command("export")
+@click.option("--out", "-o", required=True, help="Destination JSON file path.")
+def memory_export(out: str) -> None:
+    """Export all memories and vector metadata to JSON."""
+    store = _get_cli_memory_store()
+    try:
+        store.export_json(out)
+        console.print(f"[bold green]Successfully exported memories to:[/bold green] {out}")
+    except Exception as e:
+        console.print(f"[bold red]Export failed:[/bold red] {e}")
+        sys.exit(1)
+
+
+@memory.command("import")
+@click.option("--file", "-f", required=True, help="Path to JSON memory backup file.")
+def memory_import(file: str) -> None:
+    """Import memories from JSON backup file."""
+    store = _get_cli_memory_store()
+    try:
+        count = store.import_json(file)
+        console.print(f"[bold green]Successfully imported {count} memories from:[/bold green] {file}")
+    except Exception as e:
+        console.print(f"[bold red]Import failed:[/bold red] {e}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

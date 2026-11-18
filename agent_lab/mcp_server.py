@@ -53,6 +53,13 @@ from agent_lab.router import (
     RoutingExecutionReceipt,
     TokenGovernor,
 )
+from agent_lab.memory import (
+    CrossAgentMemoryStore,
+    MemoryKind,
+    MemoryAccessLevel,
+    MemoryEntry,
+    MemorySearchResult,
+)
 
 # Default global orchestrator and collector
 _config = AgentLabConfig.load()
@@ -61,6 +68,7 @@ _registry = AnchorAgentRegistryClient()
 _coordinator = SwarmCoordinator(workspace_root=_config.workspace_root, registry_client=_registry)
 _telemetry = TelemetryCollector()
 _router = AdaptiveModelRouter()
+_memory_store = CrossAgentMemoryStore()
 
 
 def agentlab_session_start(agent_name: str, goal: str) -> str:
@@ -817,6 +825,107 @@ def agentlab_router_benchmark_resilience(
         })
     except Exception as e:
         return json.dumps({"status": "error", "error": str(e)})
+
+
+# ---------------------------------------------------------------------------
+# Cross-Agent Memory FastMCP Tools
+# ---------------------------------------------------------------------------
+
+def agentlab_memory_store(
+    content: str,
+    agent_id: str,
+    kind: str = "SEMANTIC",
+    access_level: str = "SWARM",
+    tags: Optional[List[str]] = None,
+    importance: float = 0.5,
+    ttl_seconds: Optional[float] = None,
+    namespace: str = "default",
+) -> str:
+    """Store an episodic, semantic, or procedural memory item with dense vector indexing."""
+    try:
+        entry = _memory_store.store(
+            content=content,
+            agent_id=agent_id,
+            kind=MemoryKind(kind),
+            access_level=MemoryAccessLevel(access_level),
+            tags=tags or [],
+            importance=importance,
+            ttl_seconds=ttl_seconds,
+            namespace=namespace,
+        )
+        return json.dumps({
+            "status": "success",
+            "memory": entry.to_dict(),
+        })
+    except Exception as e:
+        return json.dumps({"status": "error", "error": str(e)})
+
+
+def agentlab_memory_search(
+    query: str,
+    agent_id: Optional[str] = None,
+    namespace: Optional[str] = None,
+    kind: Optional[str] = None,
+    top_k: int = 5,
+    min_score: float = 0.0,
+    hybrid_alpha: float = 0.70,
+) -> str:
+    """Search cross-agent semantic memories using hybrid dense vector and keyword retrieval."""
+    try:
+        kind_enum = MemoryKind(kind) if kind else None
+        results = _memory_store.search(
+            query=query,
+            requesting_agent_id=agent_id,
+            namespace=namespace,
+            kind=kind_enum,
+            top_k=top_k,
+            min_score=min_score,
+            hybrid_alpha=hybrid_alpha,
+        )
+        return json.dumps({
+            "status": "success",
+            "query": query,
+            "count": len(results),
+            "results": [r.to_dict() for r in results],
+        })
+    except Exception as e:
+        return json.dumps({"status": "error", "error": str(e)})
+
+
+def agentlab_memory_get_stats() -> str:
+    """Retrieve cross-agent memory store health, volume, and partition metrics."""
+    try:
+        stats = _memory_store.get_stats()
+        return json.dumps({
+            "status": "success",
+            "stats": stats,
+        })
+    except Exception as e:
+        return json.dumps({"status": "error", "error": str(e)})
+
+
+def agentlab_memory_clear_or_evict(
+    namespace: str = "default",
+    target_capacity: int = 100,
+    strategy: str = "DECAY",
+) -> str:
+    """Evict expired or low-value memories to maintain strict capacity limits."""
+    try:
+        evicted = _memory_store.evict_to_capacity(
+            namespace=namespace,
+            target_capacity=target_capacity,
+            strategy=strategy,
+        )
+        return json.dumps({
+            "status": "success",
+            "namespace": namespace,
+            "evicted_count": evicted,
+            "target_capacity": target_capacity,
+            "strategy": strategy,
+        })
+    except Exception as e:
+        return json.dumps({"status": "error", "error": str(e)})
+
 
 
 

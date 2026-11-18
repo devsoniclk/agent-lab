@@ -227,3 +227,50 @@ Benchmark swarm routing resilience, zero-downtime failover rate, and end-to-end 
 ```bash
 agent-lab router benchmark-resilience [--requests <int>] [--fault-rate <float>] [--route <route_name>]
 ```
+
+---
+
+## 8. Cross-Agent Semantic Memory Store & Vector Retrieval (`agent-lab memory`)
+
+### `agent-lab memory store`
+Store an episodic, semantic, or procedural memory entry with pure-Python vector indexing and metadata tags.
+
+```bash
+agent-lab memory store -c "<content>" [-a <agent_id>] [-n <namespace>] [-k EPISODIC|SEMANTIC|PROCEDURAL|WORKING] [--access-level PRIVATE|SWARM|PUBLIC] [-t <tag>] [-i <importance>] [--ttl <seconds>]
+```
+
+### `agent-lab memory search`
+Search cross-agent memories using hybrid dense vector similarity, token-overlap keyword matching, and exponential recency decay ranking.
+
+```bash
+agent-lab memory search -q "<query>" [-a <requesting_agent>] [-n <namespace>] [-k <kind>] [-k-top <int>] [--hybrid-alpha <float>] [--min-score <float>] [--json-out <path>]
+```
+
+### `agent-lab memory stats`
+Display comprehensive health and volume metrics across memory partitions, access levels, and embedding status.
+
+```bash
+agent-lab memory stats [--json-out <path>]
+```
+
+### `agent-lab memory evict`
+Evict low-value, decayed, or expired memories to enforce strict partition capacity limits.
+
+```bash
+agent-lab memory evict [-n <namespace>] [-c <target_capacity>] [-s DECAY|LRU|LIF]
+```
+
+### `agent-lab memory export`
+Export entire memory store to a serialized JSON file for backup and replication.
+
+```bash
+agent-lab memory export -o <backup.json>
+```
+
+### `agent-lab memory import`
+Import memories from a serialized JSON backup file.
+
+```bash
+agent-lab memory import -f <backup.json>
+```
+
