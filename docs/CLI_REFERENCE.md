@@ -45,3 +45,59 @@ Verify syntax, calculate cyclomatic complexity, and check entrypoint existence f
 ```bash
 agent-lab eval ast-check <file_path> [--entry <function_name>]
 ```
+
+### `agent-lab eval trajectory`
+Evaluate multi-step agent tool trajectories for precision, recall, tool F1 score, loop detection, and step efficiency.
+
+```bash
+agent-lab eval trajectory --trajectory <trajectory_json> --expected "<tool1,tool2>" [--max-steps <int>]
+```
+
+### `agent-lab eval suite`
+Execute an entire coding benchmark suite using canonical evaluation and Wilson score confidence intervals.
+
+```bash
+agent-lab eval suite --tasks <tasks_json>
+```
+
+### `agent-lab telemetry show`
+Display real-time interactive terminal telemetry dashboard tracking rollbacks, consensus rounds, benchmark pass rates, and tool-use F1 scores.
+
+```bash
+agent-lab telemetry show [--path <telemetry_file>]
+```
+
+### `agent-lab telemetry export`
+Export aggregated cross-agent telemetry metrics to Markdown or JSON.
+
+```bash
+agent-lab telemetry export [--format markdown|json] [--output <file_path>]
+```
+
+### `agent-lab eval trajectory`
+Evaluate an agent tool execution trajectory JSON log for tool precision, recall, F1 score, loop detection, and sequence validity.
+
+```bash
+agent-lab eval trajectory --trajectory <trajectory.json> --expected "<tool1>,<tool2>" [--max-steps <int>]
+```
+
+### `agent-lab eval suite`
+Run an entire automated coding benchmark suite with canonical verification and 95% Wilson score confidence interval calculation.
+
+```bash
+agent-lab eval suite --tasks <tasks.json>
+```
+
+### `agent-lab telemetry show`
+Launch the real-time interactive terminal dashboard displaying cross-agent lifecycle metrics, rollbacks, consensus stats, and evaluation pass rates.
+
+```bash
+agent-lab telemetry show [--path <telemetry.json>]
+```
+
+### `agent-lab telemetry export`
+Export cross-agent operational telemetry to Markdown or structured JSON.
+
+```bash
+agent-lab telemetry export [--format markdown|json] [--output <path>]
+```

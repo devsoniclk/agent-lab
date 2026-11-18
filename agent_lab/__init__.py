@@ -11,10 +11,13 @@ from agent_lab.eval import (
     PassAtKEstimator,
     ASTVerifier,
     RegressionTracker,
+    TrajectoryEvaluator,
+    StatisticalInterval,
     BenchmarkTask,
 )
+from agent_lab.telemetry import TelemetryCollector, TelemetryMetrics, TelemetryEvent
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 __all__ = [
     "AgentLabConfig",
     "AgentLabOrchestrator",
@@ -26,5 +29,10 @@ __all__ = [
     "PassAtKEstimator",
     "ASTVerifier",
     "RegressionTracker",
+    "TrajectoryEvaluator",
+    "StatisticalInterval",
     "BenchmarkTask",
+    "TelemetryCollector",
+    "TelemetryMetrics",
+    "TelemetryEvent",
 ]

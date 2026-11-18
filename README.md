@@ -95,11 +95,16 @@ flowchart TD
 - **Equivocation Slashing:** Real-time detection of conflicting votes by rogue or compromised agents, automatically isolating Byzantine validators.
 - **Cryptographic Merkle Action Receipts:** Computes RFC 6962-compliant Merkle trees over deliberation steps (Observation -> Thought -> Tool Call -> Action), producing tamper-evident `.witness` files.
 - **Pre-Flight Web3 Simulation:** Simulates Solana transactions pre-flight, profiling Compute Units (CU) and decoding custom Anchor errors.
-- **Autonomous Evaluation Harness:**
-  - Unbiased Pass@k calculation ($\text{pass@1}, \text{pass@5}, \text{pass@10}$) using numerically stable iterative products.
+- **Autonomous Evaluation Harness & Trajectory Scoring:**
+  - Unbiased Pass@k calculation ($\text{pass@1}, \text{pass@5}, \text{pass@10}$) using numerically stable iterative products with 95% Wilson score confidence intervals.
+  - Multi-step tool trajectory evaluator scoring Tool-Selection Precision, Recall, and F1 score against expected tool multisets.
+  - Runtime loop/repetition detection (flagging 3+ consecutive redundant invocations) and sequence ordering enforcement (prerequisite vs. dependent tool validation).
   - Deterministic AST syntax parsing, entrypoint validation, and cyclomatic complexity scoring.
   - Automated regression tracking comparing candidate benchmarks against historical baselines.
-- **FastMCP Protocol Integration:** Exposes 10 native tools for Claude Code, OpenBot, Cursor, and custom agent harnesses.
+- **Cross-Agent Telemetry & Live Dashboard:**
+  - Real-time aggregation of active sessions, micro-checkpoints, rollbacks, BFT consensus votes, and Solana simulations.
+  - Interactive terminal dashboard (`agent-lab telemetry show`) and automated Markdown/JSON export.
+- **FastMCP Protocol Integration:** Exposes 13 native tools for Claude Code, OpenBot, Cursor, and custom agent harnesses.
 
 ---
 
@@ -131,13 +136,24 @@ agent-lab init
 agent-lab doctor
 ```
 
-### Step 3: Run Evaluation Harness
+### Step 3: Run Evaluation Harness & Trajectory Scoring
 ```bash
-# Compute unbiased Pass@1 on 10 samples with 8 passes
+# Compute unbiased Pass@1 on 10 samples with 8 passes + 95% Wilson CI
 agent-lab eval pass-at-k -n 10 -c 8 -k 1
 
 # Statically verify Python syntax and entry point
 agent-lab eval ast-check src/app.py --entry main
+
+# Score agent tool-use trajectory for F1 and infinite loops
+agent-lab eval trajectory --trajectory logs/tools.json --expected "checkpoint,write,test"
+
+# Run curated HumanEval benchmark suite
+agent-lab eval suite --tasks benchmarks/humaneval_mini.json
+```
+
+### Step 4: Launch Ecosystem Telemetry Dashboard
+```bash
+agent-lab telemetry show
 ```
 
 ---
@@ -210,6 +226,17 @@ print(f"Committed: {result.committed}, Quorum: {result.quorum_reached}")
 ### `PassAtKEstimator`
 - `estimate(n: int, c: int, k: int) -> float`: Calculates unbiased Pass@k metric.
 
+### `TrajectoryEvaluator`
+- `evaluate(trajectory, expected_tools, sequence_rules, max_steps) -> dict`: Evaluates multi-step agent tool trajectories for precision, recall, F1, loops, and sequence validity.
+
+### `StatisticalInterval`
+- `wilson_score_interval(successes, trials, confidence) -> tuple[float, float]`: Robust binomial proportion confidence intervals.
+
+### `TelemetryCollector`
+- `record_session`, `record_checkpoint`, `record_rollback`, `record_consensus`, `record_eval`, `record_trajectory_eval`: Aggregates cross-agent lifecycle events.
+- `render_dashboard(console)`: Renders terminal dashboard.
+- `to_markdown() -> str`: Generates clean Markdown report.
+
 ---
 
 ## 10. Benchmarks
@@ -234,6 +261,8 @@ print(f"Committed: {result.committed}, Quorum: {result.quorum_reached}")
 | **Cryptographic Merkle Receipts** | **✓** | — | — | — |
 | **Pre-Flight Solana Simulation** | **✓** | — | — | — |
 | **Pass@k Evaluation Harness** | **✓** | — | — | — |
+| **Tool Trajectory F1 & Loop Detection** | **✓** | — | — | — |
+| **Cross-Agent Telemetry Dashboard** | **✓** | — | — | — |
 | **FastMCP Server Protocol** | **✓** | — | — | — |
 
 ---
@@ -241,9 +270,10 @@ print(f"Committed: {result.committed}, Quorum: {result.quorum_reached}")
 ## 12. Roadmap
 
 - [x] **v0.1.0:** Core meta-orchestrator, transactional sessions, BFT consensus coordinator, OCC conflict detection, Pass@k evaluation harness, and FastMCP server.
-- [ ] **v0.2.0:** Distributed WebSocket consensus transport for multi-host worker swarms.
-- [ ] **v0.3.0:** Solana Anchor on-chain agent registry and staking contract integration.
-- [ ] **v0.4.0:** Zero-knowledge execution proofs via RISC Zero zkVM guest verification.
+- [x] **v0.2.0:** Multi-agent trajectory tool-use scoring (Precision/Recall/F1), loop & repetition detection, Wilson confidence intervals, benchmark suite execution (`humaneval_mini.json`), and cross-agent terminal telemetry dashboard.
+- [ ] **v0.3.0:** Distributed WebSocket consensus transport for multi-host worker swarms.
+- [ ] **v0.4.0:** Solana Anchor on-chain agent registry and staking contract integration.
+- [ ] **v0.5.0:** Zero-knowledge execution proofs via RISC Zero zkVM guest verification.
 - [ ] **v1.0.0:** General Availability enterprise release with PyPI binary distributions.
 
 ---

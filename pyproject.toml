@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agent-lab"
-version = "0.1.0"
+version = "0.2.0"
 description = "Unified autonomous AI agent safety orchestrator, BFT swarm consensus coordinator, and evaluation benchmark harness"
 readme = "README.md"
 authors = [

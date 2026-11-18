@@ -1,6 +1,8 @@
 """
 agent_lab.eval: Autonomous OSS benchmark and LLM code evaluation pipeline.
-Implements Pass@k estimators, deterministic AST syntax checking, and regression tracking.
+Implements Pass@k estimators, deterministic AST syntax checking,
+trajectory tool-use scoring (precision/recall/F1, loops, sequence rules),
+and statistical confidence intervals.
 """
 
 from __future__ import annotations
@@ -8,6 +10,7 @@ from __future__ import annotations
 import ast
 import json
 import math
+from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -22,6 +25,44 @@ class BenchmarkTask:
     test_code: str
     canonical_solution: Optional[str] = None
     tags: List[str] = field(default_factory=list)
+
+
+class StatisticalInterval:
+    """Statistical bounds and confidence intervals for stochastic evaluation metrics."""
+
+    @staticmethod
+    def wilson_score_interval(
+        successes: int,
+        trials: int,
+        confidence: float = 0.95,
+    ) -> Tuple[float, float]:
+        """
+        Calculate the Wilson score confidence interval for a binomial proportion.
+        Zero external dependencies, robust even with small sample sizes.
+        """
+        if trials <= 0:
+            return (0.0, 0.0)
+        if successes < 0 or successes > trials:
+            raise ValueError(f"successes={successes} must be between 0 and trials={trials}")
+
+        # Standard normal quantiles (two-tailed)
+        if confidence >= 0.99:
+            z = 2.575829
+        elif confidence >= 0.95:
+            z = 1.959964
+        elif confidence >= 0.90:
+            z = 1.644854
+        else:
+            z = 1.959964
+
+        p = successes / trials
+        denominator = 1.0 + (z ** 2) / trials
+        center = p + (z ** 2) / (2.0 * trials)
+        std_err = math.sqrt((p * (1.0 - p) + (z ** 2) / (4.0 * trials)) / trials)
+
+        lower = max(0.0, (center - z * std_err) / denominator)
+        upper = min(1.0, (center + z * std_err) / denominator)
+        return (round(lower, 4), round(upper, 4))
 
 
 class PassAtKEstimator:
@@ -99,6 +140,111 @@ class ASTVerifier:
         }
 
 
+class TrajectoryEvaluator:
+    """
+    Evaluates multi-step tool call trajectories for autonomous agents.
+    Calculates Tool-Selection Precision/Recall/F1, sequence ordering adherence,
+    repetition/loop detection, and step efficiency.
+    """
+
+    @staticmethod
+    def evaluate(
+        trajectory: List[Dict[str, Any]],
+        expected_tools: List[str],
+        sequence_rules: Optional[List[Tuple[str, str]]] = None,
+        max_steps: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """
+        Evaluate a sequence of tool calls against target expectations.
+        - trajectory: list of dicts with at least {"tool": str, ...}
+        - expected_tools: list of tool names expected in the trajectory
+        - sequence_rules: list of (prerequisite, dependent) tuples
+        - max_steps: budget cap for execution steps
+        """
+        valid_steps = [step for step in trajectory if isinstance(step, dict) and "tool" in step]
+        called_tools = [step["tool"] for step in valid_steps]
+
+        # 1. Precision, Recall, F1 via multiset matching
+        called_counts = Counter(called_tools)
+        expected_counts = Counter(expected_tools)
+
+        overlap = sum((called_counts & expected_counts).values())
+        total_called = len(called_tools)
+        total_expected = len(expected_tools)
+
+        precision = (overlap / total_called) if total_called > 0 else (1.0 if total_expected == 0 else 0.0)
+        recall = (overlap / total_expected) if total_expected > 0 else 1.0
+
+        if precision + recall > 0:
+            f1_score = 2.0 * (precision * recall) / (precision + recall)
+        else:
+            f1_score = 0.0
+
+        # 2. Sequence ordering rules: prerequisite must appear before dependent
+        sequence_violations: List[str] = []
+        if sequence_rules:
+            for prereq, dep in sequence_rules:
+                if dep in called_tools:
+                    dep_first_idx = called_tools.index(dep)
+                    if prereq not in called_tools:
+                        sequence_violations.append(
+                            f"Rule violation: '{dep}' called without required prerequisite '{prereq}'"
+                        )
+                    else:
+                        prereq_first_idx = called_tools.index(prereq)
+                        if prereq_first_idx > dep_first_idx:
+                            sequence_violations.append(
+                                f"Order violation: '{prereq}' must be called before '{dep}' (indices {prereq_first_idx} > {dep_first_idx})"
+                            )
+
+        # 3. Loop and repetition detection (>= 3 consecutive identical tool calls or identical call signatures)
+        loop_detected = False
+        loop_details: List[str] = []
+        consecutive_same_count = 1
+        for i in range(1, len(valid_steps)):
+            prev_call = valid_steps[i - 1]
+            curr_call = valid_steps[i]
+            prev_sig = (prev_call.get("tool"), json.dumps(prev_call.get("args", {}), sort_keys=True))
+            curr_sig = (curr_call.get("tool"), json.dumps(curr_call.get("args", {}), sort_keys=True))
+
+            if prev_sig == curr_sig:
+                consecutive_same_count += 1
+                if consecutive_same_count >= 3 and not loop_detected:
+                    loop_detected = True
+                    loop_details.append(
+                        f"Infinite loop detected: tool '{curr_call.get('tool')}' invoked 3+ times with identical args"
+                    )
+            else:
+                consecutive_same_count = 1
+
+        # 4. Step efficiency
+        actual_steps = len(called_tools)
+        step_efficiency = round((total_expected / actual_steps), 4) if actual_steps > 0 else 1.0
+        exceeded_max = bool(max_steps and actual_steps > max_steps)
+
+        is_valid = (
+            len(sequence_violations) == 0
+            and not loop_detected
+            and not exceeded_max
+            and (f1_score > 0.0 or total_expected == 0)
+        )
+
+        return {
+            "valid": is_valid,
+            "precision": round(precision, 4),
+            "recall": round(recall, 4),
+            "f1_score": round(f1_score, 4),
+            "called_tools": called_tools,
+            "expected_tools": expected_tools,
+            "step_count": actual_steps,
+            "step_efficiency": step_efficiency,
+            "has_loop": loop_detected,
+            "loop_details": loop_details,
+            "sequence_violations": sequence_violations,
+            "exceeded_max_steps": exceeded_max,
+        }
+
+
 class RegressionTracker:
     """Diffs candidate benchmarks against baselines to catch regressions."""
 
@@ -140,7 +286,7 @@ class BenchmarkHarness:
     """Full evaluation orchestrator executing benchmark suites and estimating metrics."""
 
     def __init__(self, tasks: Optional[List[BenchmarkTask]] = None) -> None:
-        self.tasks = tasks or []
+        self.tasks: List[BenchmarkTask] = tasks or []
 
     def load_from_json(self, file_path: str) -> int:
         """Load benchmark tasks from a JSON file."""
@@ -204,3 +350,47 @@ class BenchmarkHarness:
                 "error": f"{type(e).__name__}: {str(e)}",
                 "ast": ast_result,
             }
+
+    def run_suite(
+        self,
+        tasks_file: Optional[str] = None,
+        candidate_generator: Optional[Callable[[BenchmarkTask], str]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Execute an entire benchmark suite, running candidates or canonical solutions.
+        Returns accuracy, pass counts, task-by-task results, and confidence interval.
+        """
+        if tasks_file:
+            self.load_from_json(tasks_file)
+
+        if not self.tasks:
+            return {"total": 0, "passed": 0, "pass_rate": 0.0, "tasks": []}
+
+        results: List[Dict[str, Any]] = []
+        passed_count = 0
+
+        for task in self.tasks:
+            if candidate_generator:
+                code = candidate_generator(task)
+            elif task.canonical_solution:
+                code = f"{task.prompt}\n{task.canonical_solution}"
+            else:
+                code = task.prompt
+
+            eval_res = self.evaluate_candidate(task_id=task.task_id, generated_code=code)
+            results.append(eval_res)
+            if eval_res.get("passed"):
+                passed_count += 1
+
+        total = len(self.tasks)
+        pass_rate = round(passed_count / total, 4) if total > 0 else 0.0
+        ci_lower, ci_upper = StatisticalInterval.wilson_score_interval(passed_count, total)
+
+        return {
+            "total": total,
+            "passed": passed_count,
+            "failed": total - passed_count,
+            "pass_rate": pass_rate,
+            "confidence_interval_95": [ci_lower, ci_upper],
+            "results": results,
+        }

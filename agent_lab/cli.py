@@ -17,7 +17,15 @@ from rich.table import Table
 from agent_lab.config import AgentLabConfig
 from agent_lab.orchestrator import AgentLabOrchestrator, HAS_ROLLBACK, HAS_WITNESS, HAS_SOLANA_LENS
 from agent_lab.consensus import SwarmCoordinator, SwarmProposal, SwarmVote
-from agent_lab.eval import PassAtKEstimator, ASTVerifier, RegressionTracker
+from agent_lab.eval import (
+    PassAtKEstimator,
+    ASTVerifier,
+    RegressionTracker,
+    TrajectoryEvaluator,
+    BenchmarkHarness,
+    StatisticalInterval,
+)
+from agent_lab.telemetry import TelemetryCollector
 
 console = Console()
 
@@ -25,7 +33,7 @@ console = Console()
 @click.group()
 @click.version_option(package_name="agent-lab")
 def main() -> None:
-    """agent-lab: Unified autonomous AI agent safety orchestrator & evaluation harness."""
+    """agent-lab: Unified autonomous AI agent safety orchestrator, BFT swarm consensus, & eval harness."""
     pass
 
 
@@ -96,7 +104,7 @@ def session_start(agent: str, goal: str) -> None:
 
 @main.group()
 def eval() -> None:
-    """Autonomous OSS evaluation and benchmarking tools."""
+    """Autonomous OSS evaluation, trajectory verification, and benchmarking."""
     pass
 
 
@@ -105,10 +113,12 @@ def eval() -> None:
 @click.option("-c", type=int, required=True, help="Number of correct samples.")
 @click.option("-k", type=int, required=True, help="Evaluations count (k).")
 def eval_pass_at_k(n: int, c: int, k: int) -> None:
-    """Compute unbiased Pass@k metric using Chen et al. formula."""
+    """Compute unbiased Pass@k metric with Wilson score confidence interval."""
     try:
         score = PassAtKEstimator.estimate(n=n, c=c, k=k)
+        ci_lower, ci_upper = StatisticalInterval.wilson_score_interval(c, n)
         console.print(f"[bold green]Pass@{k}:[/bold green] [cyan]{score:.4f}[/cyan] ({score*100:.2f}%)")
+        console.print(f"[dim]95% Confidence Interval (Wilson): [{ci_lower:.4f}, {ci_upper:.4f}][/dim]")
     except Exception as e:
         console.print(f"[bold red]Error:[/bold red] {e}")
         sys.exit(1)
@@ -131,6 +141,98 @@ def eval_ast_check(file_path: str, entry: Optional[str]) -> None:
     else:
         console.print(f"[bold red]✗ AST Error:[/bold red] {res['error']}")
         sys.exit(1)
+
+
+@eval.command("trajectory")
+@click.option("--trajectory", "-t", required=True, type=click.Path(exists=True), help="JSON file with tool calls.")
+@click.option("--expected", "-e", required=True, help="Comma-separated list of expected tools.")
+@click.option("--max-steps", "-m", type=int, default=None, help="Maximum allowed steps.")
+def eval_trajectory(trajectory: str, expected: str, max_steps: Optional[int]) -> None:
+    """Evaluate an agent tool trajectory for F1 score, loops, and step efficiency."""
+    try:
+        data = json.loads(Path(trajectory).read_text(encoding="utf-8"))
+        expected_list = [t.strip() for t in expected.split(",") if t.strip()]
+
+        res = TrajectoryEvaluator.evaluate(
+            trajectory=data,
+            expected_tools=expected_list,
+            max_steps=max_steps,
+        )
+
+        table = Table(title="Trajectory Evaluation Summary")
+        table.add_column("Metric", style="cyan")
+        table.add_column("Value", style="bold green" if res["valid"] else "bold yellow")
+
+        table.add_row("Outcome Validity", "✓ Valid" if res["valid"] else "✗ Failed Rules")
+        table.add_row("Precision", f"{res['precision']:.4f}")
+        table.add_row("Recall", f"{res['recall']:.4f}")
+        table.add_row("Tool-Selection F1", f"{res['f1_score']:.4f}")
+        table.add_row("Steps Used", f"{res['step_count']}")
+        table.add_row("Step Efficiency", f"{res['step_efficiency']:.4f}")
+        table.add_row("Loop Detected", "[red]Yes[/red]" if res["has_loop"] else "[green]No[/green]")
+
+        console.print(table)
+        if not res["valid"]:
+            sys.exit(1)
+    except Exception as e:
+        console.print(f"[bold red]Error:[/bold red] {e}")
+        sys.exit(1)
+
+
+@eval.command("suite")
+@click.option("--tasks", "-t", required=True, type=click.Path(exists=True), help="Benchmark JSON suite file.")
+def eval_suite(tasks: str) -> None:
+    """Run an entire coding benchmark suite using canonical verification."""
+    harness = BenchmarkHarness()
+    summary = harness.run_suite(tasks_file=tasks)
+
+    table = Table(title=f"Benchmark Suite Results ({tasks})")
+    table.add_column("Task ID", style="cyan")
+    table.add_column("Status", style="bold")
+    table.add_column("Details", style="dim")
+
+    for r in summary.get("results", []):
+        st = "[green]PASSED[/green]" if r.get("passed") else "[red]FAILED[/red]"
+        err = r.get("error") or "All assertions passed"
+        table.add_row(r.get("task_id", ""), st, err)
+
+    console.print(table)
+    console.print(
+        f"\n[bold]Total:[/bold] {summary['total']} | "
+        f"[bold green]Passed:[/bold green] {summary['passed']} | "
+        f"[bold red]Failed:[/bold red] {summary['failed']} | "
+        f"[bold cyan]Pass Rate:[/bold cyan] {summary['pass_rate']*100:.1f}% "
+        f"[dim](95% CI: [{summary['confidence_interval_95'][0]:.2f}, {summary['confidence_interval_95'][1]:.2f}])[/dim]"
+    )
+
+
+@main.group()
+def telemetry() -> None:
+    """Cross-agent telemetry aggregation and performance dashboard."""
+    pass
+
+
+@telemetry.command("show")
+@click.option("--path", "-p", default=None, help="Custom telemetry file path.")
+def telemetry_show(path: Optional[str]) -> None:
+    """Display the interactive terminal telemetry dashboard."""
+    collector = TelemetryCollector.load(path) if path else TelemetryCollector()
+    collector.render_dashboard(console)
+
+
+@telemetry.command("export")
+@click.option("--format", "-f", type=click.Choice(["json", "markdown"]), default="markdown", help="Export format.")
+@click.option("--output", "-o", default=None, help="Target file path for output.")
+def telemetry_export(format: str, output: Optional[str]) -> None:
+    """Export telemetry metrics as Markdown or JSON."""
+    collector = TelemetryCollector()
+    content = collector.to_markdown() if format == "markdown" else json.dumps(collector.get_metrics_dict(), indent=2)
+
+    if output:
+        Path(output).write_text(content, encoding="utf-8")
+        console.print(f"[green]✓ Exported telemetry to {output}[/green]")
+    else:
+        console.print(content)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,84 @@
+{
+  "tasks": [
+    {
+      "task_id": "HumanEval/0",
+      "prompt": "from typing import List\n\ndef has_close_elements(numbers: List[float], threshold: float) -> bool:\n    \"\"\" Check if in given list of numbers, are any two numbers closer to each other than given threshold.\"\"\"",
+      "entry_point": "has_close_elements",
+      "canonical_solution": "    for idx, elem in enumerate(numbers):\n        for idx2, elem2 in enumerate(numbers):\n            if idx != idx2:\n                distance = abs(elem - elem2)\n                if distance < threshold:\n                    return True\n    return False\n",
+      "test_code": "assert has_close_elements([1.0, 2.0, 3.9, 4.0, 5.0, 2.2], 0.3) == True\nassert has_close_elements([1.0, 2.0, 3.9, 4.0, 5.0, 2.2], 0.05) == False\nassert has_close_elements([1.0, 2.0, 5.9, 4.0, 5.0], 0.95) == True\nassert has_close_elements([1.0, 2.0, 5.9, 4.0, 5.0], 0.8) == False\n",
+      "tags": ["math", "geometry", "humaneval"]
+    },
+    {
+      "task_id": "HumanEval/1",
+      "prompt": "from typing import List\n\ndef separate_paren_groups(paren_string: str) -> List[str]:\n    \"\"\" Input to this function is a string containing multiple groups of nested parentheses. Separate those groups into separate strings and return the list of those. Separate groups are balanced (each open brace is properly closed) and not nested within each other. Ignore any spaces in the input string.\"\"\"",
+      "entry_point": "separate_paren_groups",
+      "canonical_solution": "    result = []\n    current_string = []\n    current_depth = 0\n    for c in paren_string:\n        if c == '(':\n            current_depth += 1\n            current_string.append(c)\n        elif c == ')':\n            current_depth -= 1\n            current_string.append(c)\n            if current_depth == 0:\n                result.append(''.join(current_string))\n                current_string.clear()\n    return result\n",
+      "test_code": "assert separate_paren_groups('(()()) ((())) () ((())()())') == ['(()())', '((()))', '()', '((())()())']\nassert separate_paren_groups('() (()) ((()))') == ['()', '(())', '((()))']\n",
+      "tags": ["parsing", "strings", "humaneval"]
+    },
+    {
+      "task_id": "HumanEval/2",
+      "prompt": "\ndef truncate_number(number: float) -> float:\n    \"\"\" Given a positive floating point number, it can be decomposed into and integer part and decimals part. Return the decimal part of the number.\"\"\"",
+      "entry_point": "truncate_number",
+      "canonical_solution": "    return round(number % 1.0, 6)\n",
+      "test_code": "assert truncate_number(3.5) == 0.5\nassert abs(truncate_number(1.33) - 0.33) < 1e-5\nassert abs(truncate_number(123.456) - 0.456) < 1e-5\n",
+      "tags": ["math", "numbers", "humaneval"]
+    },
+    {
+      "task_id": "HumanEval/3",
+      "prompt": "from typing import List\n\ndef below_zero(operations: List[int]) -> bool:\n    \"\"\" You're given a list of deposit and withdrawal operations on a bank account that starts with zero balance. Your task is to detect if at any point the balance of account falls below zero.\"\"\"",
+      "entry_point": "below_zero",
+      "canonical_solution": "    balance = 0\n    for op in operations:\n        balance += op\n        if balance < 0:\n            return True\n    return False\n",
+      "test_code": "assert below_zero([1, 2, 3]) == False\nassert below_zero([1, 2, -4, 5]) == True\nassert below_zero([1, -1, 2, -2, 5]) == False\nassert below_zero([1, -1, 2, -3, 5]) == True\n",
+      "tags": ["finance", "logic", "humaneval"]
+    },
+    {
+      "task_id": "HumanEval/4",
+      "prompt": "from typing import List\n\ndef mean_absolute_deviation(numbers: List[float]) -> float:\n    \"\"\" For a given list of input numbers, calculate Mean Absolute Deviation around the mean of this dataset.\"\"\"",
+      "entry_point": "mean_absolute_deviation",
+      "canonical_solution": "    mean = sum(numbers) / len(numbers)\n    return sum(abs(x - mean) for x in numbers) / len(numbers)\n",
+      "test_code": "assert abs(mean_absolute_deviation([1.0, 2.0, 3.0, 4.0]) - 1.0) < 1e-5\nassert abs(mean_absolute_deviation([2.0, 2.0, 2.0]) - 0.0) < 1e-5\n",
+      "tags": ["statistics", "math", "humaneval"]
+    },
+    {
+      "task_id": "HumanEval/5",
+      "prompt": "from typing import List\n\ndef intersperse(numbers: List[int], delimeter: int) -> List[int]:\n    \"\"\" Insert a number 'delimeter' between every two consecutive elements of input list `numbers'`\"\"\"",
+      "entry_point": "intersperse",
+      "canonical_solution": "    if not numbers:\n        return []\n    result = []\n    for n in numbers[:-1]:\n        result.extend([n, delimeter])\n    result.append(numbers[-1])\n    return result\n",
+      "test_code": "assert intersperse([], 4) == []\nassert intersperse([1, 2, 3], 4) == [1, 4, 2, 4, 3]\nassert intersperse([5], 1) == [5]\n",
+      "tags": ["algorithms", "lists", "humaneval"]
+    },
+    {
+      "task_id": "HumanEval/6",
+      "prompt": "from typing import List\n\ndef parse_nested_parens(paren_string: str) -> List[int]:\n    \"\"\" Input to this function is a string represented multiple groups for nested parentheses separated by spaces. For each group, output the deepest level of nesting of parentheses.\"\"\"",
+      "entry_point": "parse_nested_parens",
+      "canonical_solution": "    def parse_single(s: str) -> int:\n        depth = 0\n        max_depth = 0\n        for c in s:\n            if c == '(':\n                depth += 1\n                max_depth = max(max_depth, depth)\n            elif c == ')':\n                depth -= 1\n        return max_depth\n    return [parse_single(x) for x in paren_string.split(' ') if x]\n",
+      "test_code": "assert parse_nested_parens('(()()) ((())) () ((())()())') == [2, 3, 1, 3]\nassert parse_nested_parens('() (())') == [1, 2]\n",
+      "tags": ["parsing", "strings", "humaneval"]
+    },
+    {
+      "task_id": "HumanEval/7",
+      "prompt": "from typing import List\n\ndef filter_by_substring(strings: List[str], substring: str) -> List[str]:\n    \"\"\" Filter an input list of strings only for ones that contain given substring.\"\"\"",
+      "entry_point": "filter_by_substring",
+      "canonical_solution": "    return [s for s in strings if substring in s]\n",
+      "test_code": "assert filter_by_substring([], 'a') == []\nassert filter_by_substring(['abc', 'bac', 'cde', 'array'], 'a') == ['abc', 'bac', 'array']\nassert filter_by_substring(['1', '2', '3'], '4') == []\n",
+      "tags": ["strings", "filter", "humaneval"]
+    },
+    {
+      "task_id": "HumanEval/8",
+      "prompt": "from typing import List, Tuple\n\ndef sum_product(numbers: List[int]) -> Tuple[int, int]:\n    \"\"\" For a given list of integers, return a tuple consisting of a sum and a product of all the integers in a list. Empty sum should be equal to 0 and empty product should be equal to 1.\"\"\"",
+      "entry_point": "sum_product",
+      "canonical_solution": "    s = 0\n    p = 1\n    for n in numbers:\n        s += n\n        p *= n\n    return (s, p)\n",
+      "test_code": "assert sum_product([]) == (0, 1)\nassert sum_product([1, 2, 3, 4]) == (10, 24)\nassert sum_product([0, 1, 5]) == (6, 0)\n",
+      "tags": ["math", "numbers", "humaneval"]
+    },
+    {
+      "task_id": "HumanEval/9",
+      "prompt": "from typing import List\n\ndef rolling_max(numbers: List[int]) -> List[int]:\n    \"\"\" From a given list of integers, generate a list of rolling maximum element found until given moment in the sequence.\"\"\"",
+      "entry_point": "rolling_max",
+      "canonical_solution": "    if not numbers:\n        return []\n    curr_max = numbers[0]\n    res = []\n    for n in numbers:\n        curr_max = max(curr_max, n)\n        res.append(curr_max)\n    return res\n",
+      "test_code": "assert rolling_max([]) == []\nassert rolling_max([1, 2, 3, 2, 3, 4, 2]) == [1, 2, 3, 3, 3, 4, 4]\nassert rolling_max([5, 4, 3, 2, 1]) == [5, 5, 5, 5, 5]\n",
+      "tags": ["algorithms", "lists", "humaneval"]
+    }
+  ]
+}

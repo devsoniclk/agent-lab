@@ -10,17 +10,26 @@ from typing import Any, Dict, List, Optional
 from agent_lab.config import AgentLabConfig
 from agent_lab.orchestrator import AgentLabOrchestrator
 from agent_lab.consensus import SwarmCoordinator, SwarmProposal, SwarmVote
-from agent_lab.eval import PassAtKEstimator, ASTVerifier
+from agent_lab.eval import (
+    PassAtKEstimator,
+    ASTVerifier,
+    TrajectoryEvaluator,
+    BenchmarkHarness,
+    StatisticalInterval,
+)
+from agent_lab.telemetry import TelemetryCollector
 
-# Default global orchestrator
+# Default global orchestrator and collector
 _config = AgentLabConfig.load()
 _orchestrator = AgentLabOrchestrator(_config)
 _coordinator = SwarmCoordinator(workspace_root=_config.workspace_root)
+_telemetry = TelemetryCollector()
 
 
 def agentlab_session_start(agent_name: str, goal: str) -> str:
     """Start a new transactional and attested agent session."""
     session = _orchestrator.start_session(agent_name=agent_name, goal=goal)
+    _telemetry.record_session(agent_name=agent_name, goal=goal)
     return json.dumps({
         "status": "success",
         "session_id": session.session_id,
@@ -35,6 +44,7 @@ def agentlab_checkpoint_create(session_id: str, label: str) -> str:
     if not session:
         return json.dumps({"status": "error", "error": f"Session '{session_id}' not found"})
     cp_id = session.create_checkpoint(label=label)
+    _telemetry.record_checkpoint(session_id=session_id, label=label)
     return json.dumps({"status": "success", "checkpoint_id": cp_id})
 
 
@@ -44,6 +54,7 @@ def agentlab_rollback(session_id: str, checkpoint_id: str) -> str:
     if not session:
         return json.dumps({"status": "error", "error": f"Session '{session_id}' not found"})
     success = session.rollback(checkpoint_id=checkpoint_id)
+    _telemetry.record_rollback(session_id=session_id, checkpoint_id=checkpoint_id, success=success)
     return json.dumps({"status": "success" if success else "failed", "rolled_back": success})
 
 
@@ -62,6 +73,7 @@ def agentlab_simulate_solana_tx(session_id: str, tx_encoded: str) -> str:
     if not session:
         return json.dumps({"status": "error", "error": f"Session '{session_id}' not found"})
     result = session.simulate_solana_tx(tx_encoded=tx_encoded)
+    _telemetry.record_solana_sim(success=result.get("success", False), units_consumed=result.get("units_consumed", 0))
     return json.dumps({"status": "success", "result": result})
 
 
@@ -69,7 +81,15 @@ def agentlab_eval_pass_at_k(n: int, c: int, k: int) -> str:
     """Calculate unbiased pass@k for code generation evaluation."""
     try:
         val = PassAtKEstimator.estimate(n=n, c=c, k=k)
-        return json.dumps({"status": "success", "n": n, "c": c, "k": k, "pass@k": round(val, 4)})
+        ci = StatisticalInterval.wilson_score_interval(c, n)
+        return json.dumps({
+            "status": "success",
+            "n": n,
+            "c": c,
+            "k": k,
+            "pass@k": round(val, 4),
+            "confidence_interval_95": ci,
+        })
     except Exception as e:
         return json.dumps({"status": "error", "error": str(e)})
 
@@ -78,6 +98,49 @@ def agentlab_eval_ast_verify(code: str, entry_point: Optional[str] = None) -> st
     """Verify code AST syntax and entrypoint."""
     res = ASTVerifier.verify(code=code, expected_entry_point=entry_point)
     return json.dumps({"status": "success", "ast": res})
+
+
+def agentlab_eval_trajectory(
+    trajectory_json: str,
+    expected_tools_json: str,
+    sequence_rules_json: Optional[str] = None,
+    max_steps: Optional[int] = None,
+) -> str:
+    """
+    Evaluate agent tool call trajectory for precision, recall, F1, loops, and sequence validity.
+    """
+    try:
+        traj = json.loads(trajectory_json)
+        expected = json.loads(expected_tools_json)
+        seq_rules = json.loads(sequence_rules_json) if sequence_rules_json else None
+
+        res = TrajectoryEvaluator.evaluate(
+            trajectory=traj,
+            expected_tools=expected,
+            sequence_rules=seq_rules,
+            max_steps=max_steps,
+        )
+        _telemetry.record_trajectory_eval(f1_score=res["f1_score"], has_loop=res["has_loop"])
+        return json.dumps({"status": "success", "evaluation": res})
+    except Exception as e:
+        return json.dumps({"status": "error", "error": str(e)})
+
+
+def agentlab_telemetry_get_summary() -> str:
+    """Retrieve aggregated cross-agent telemetry and health metrics."""
+    return json.dumps({"status": "success", "telemetry": _telemetry.get_metrics_dict()})
+
+
+def agentlab_benchmark_run_suite(tasks_file: str) -> str:
+    """Run an entire coding benchmark suite file."""
+    try:
+        harness = BenchmarkHarness()
+        suite_res = harness.run_suite(tasks_file=tasks_file)
+        for r in suite_res.get("results", []):
+            _telemetry.record_eval(task_id=r.get("task_id", ""), passed=r.get("passed", False))
+        return json.dumps({"status": "success", "summary": suite_res})
+    except Exception as e:
+        return json.dumps({"status": "error", "error": str(e)})
 
 
 def agentlab_doctor() -> str:
